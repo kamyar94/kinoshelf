@@ -45,6 +45,7 @@ purpose; the Updates history is from the end-to-end test, where a broken release
 - [Reaching the app](#reaching-the-app)
 - [The weekly move](#the-weekly-move)
 - [Sources and keys](#sources-and-keys)
+- [Filing rules](#filing-rules)
 - [Network](#network)
 - [Updates](#updates)
 - [Hooks](#hooks)
@@ -165,6 +166,18 @@ Other commands: `kinoshelf move --dry-run`, `kinoshelf move --for-real`,
 
 Keys are stored only in `data/config.yml` (mode 600) and are never shown again on the page.
 This product uses the TMDB API but is not endorsed or certified by TMDB. TVmaze data is CC BY-SA 4.0.
+
+## Filing rules
+
+Settings > Filing rules replaces the two naming templates with an ordered list of rules: the first rule that fits
+a film or episode decides its folder and name. Rules can sort by genre, original language, country, collection,
+audio and subtitle languages, quality and more; keep collection folders together; turn a second copy into a
+version of the one already filed; and hold anything for the review page. The page shows where sample items and the
+items now in the Inbox would go while you edit, starts from neutral presets, and imports and exports YAML.
+Optional hooks make Windows folder icons and full details files for what the rules file. Details in
+[docs/FILING.md](docs/FILING.md).
+
+![Filing rules](docs/screenshots/filing.png)
 
 ## Network
 

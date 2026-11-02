@@ -69,7 +69,7 @@ shows as "Still working".
     "probe": {"duration_s": 7392.1, "video_codec": "h264", "width": 720, "height": 400, "audio": [], "subtitles": []},
     "playable": {"status": "ok", "text": "Plays on TV as it is"},
     "facts": {"genres": ["Drama"], "countries": ["JP"], "language": "ja", "translations": {"ja": "..."}, "collection": null},
-    "filing": {"folder": "X:\\Movies\\Persian\\...", "folder_new": true, "stem": "...", "tags": ["720p"]}
+    "filing": {"folder": "X:\\Movies\\Japanese\\...", "folder_new": true, "stem": "...", "tags": ["720p"]}
   },
   "settings": {"subtitle_languages": ["fa", "en"], "subtitle_mark_default": true, "device": {}},
   "options": {}

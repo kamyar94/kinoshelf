@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PICTURES = re.compile(r"\.(png|jpe?g|webp|gif|bmp|tiff?|ico|icns|psd|heic|avif|svg)$", re.I)
 ALLOWED = {
     "docs/screenshots/review.png", "docs/screenshots/review-phone.png", "docs/screenshots/settings.png",
-    "docs/screenshots/updates.png", "docs/screenshots/week.png",
+    "docs/screenshots/updates.png", "docs/screenshots/week.png", "docs/screenshots/filing.png",
     "src/kinoshelf/web/static/icon.svg",
     # the folder-icon template's four shape layers (no art, no titles)
     "src/kinoshelf/icons/assets/back.png", "src/kinoshelf/icons/assets/front.png",
