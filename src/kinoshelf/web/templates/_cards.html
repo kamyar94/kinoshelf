@@ -1,0 +1,24 @@
+{% if notes %}<p class="note">{{ notes|join('; ') }}</p>{% endif %}
+{% if cur.candidates %}
+<div class="cards" role="radiogroup" aria-label="Matches">
+{% for c in cur.candidates %}
+  <button type="button" class="card{% if loop.first %} on{% endif %}" role="radio" aria-checked="{{ 'true' if loop.first else 'false' }}" data-index="{{ c.i }}" data-dest="{{ c.dest }}">
+    <span class="card-top">
+      {% if c.poster %}<img class="poster" src="/poster?u={{ c.poster|urlencode }}" alt="" loading="lazy">{% else %}<span class="poster none" aria-hidden="true">no poster</span>{% endif %}
+      <span class="card-text">
+        <span class="ctitle">{{ c.label }}</span>
+        <span class="small soft">{{ c.sub }}</span>
+        <span class="small muted">{{ c.runtime }}</span>
+        <span class="srcs">{% for s in c.sources %}<span class="src">{{ s }}</span>{% endfor %}</span>
+      </span>
+    </span>
+    <span class="bar-row"><progress class="bar {{ 'good' if c.good else 'warn' }}" max="100" value="{{ c.score }}" aria-label="Score"></progress><span class="score {{ 'good' if c.good else 'warn' }}">{{ c.score }}%</span></span>
+    <span class="checks">
+      {% for ck in c.checks %}<span class="ck"><span class="mark {{ 'yes' if ck.ok else ('no' if ck.ok == false else 'info') }}" aria-hidden="true">{{ '✓' if ck.ok else ('✕' if ck.ok == false else 'i') }}</span>{{ ck.text }}</span>{% endfor %}
+    </span>
+  </button>
+{% endfor %}
+</div>
+{% else %}
+<div class="panel dashed">Nothing matched by name or by file hash. Search below, or paste an IMDb or TMDB link.</div>
+{% endif %}

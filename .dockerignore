@@ -1,0 +1,15 @@
+.git
+.gitignore
+PLAN.md
+PROGRESS.md
+_drafts
+data
+.env
+cloudflared.env
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.test-tmp
+tests
+src/kinoshelf/web/static/fonts/*.woff2
+src/kinoshelf/web/static/fonts/OFL.txt

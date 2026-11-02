@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}First start · Kinoshelf{% endblock %}
+{% block body %}
+<section class="panel narrow">
+  <h2 class="h2">Create the account</h2>
+  <p class="soft">This app moves files, so it has its own sign-in. The setup code is printed in the container log
+    (<span class="mono small">docker compose logs app</span>). It works once.</p>
+  {% if error %}<p class="note warn" role="alert">{{ error }}</p>{% endif %}
+  <form method="post" action="/setup" class="stack" data-plain>
+    <label>Setup code <input name="code" autocomplete="off" required autofocus class="mono"></label>
+    <label>Name <input name="username" autocomplete="username" required></label>
+    <label>Password (at least 10 characters) <input name="password" type="password" autocomplete="new-password" minlength="10" required></label>
+    <button class="btn primary" type="submit">Create and continue</button>
+  </form>
+</section>
+{% endblock %}

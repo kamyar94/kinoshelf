@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block subtitle %}{% if total %}{{ left }} waiting for you{% else %}Nothing waiting for you{% endif %}{% endblock %}
+{% block nav %}
+<a class="tab" href="/week">This week</a>
+<span class="tab on" aria-current="page">Needs you · {{ left }}</span>
+{% endblock %}
+{% block body %}
+<section class="chips" aria-label="Lookup sources">
+  <span class="chips-h">Lookups</span>
+  {% for s in sources %}<span class="chip"><span class="dot" aria-hidden="true"></span>{{ s.name }} <span class="muted">{{ s.note }}</span></span>{% else %}<span class="chip warn">No lookup source is on. Turn one on in Settings.</span>{% endfor %}
+</section>
+
+{% if not cur %}
+<section class="panel empty-state">
+  <h2>Nothing needs you</h2>
+  <p>Every file in the Inbox was matched with confidence, or the Inbox is empty. <a href="/week">See this week</a>.</p>
+</section>
+{% else %}
+<div class="review">
+  <aside class="queue" aria-label="Unsure items">
+    <h2 class="label">Unsure items</h2>
+    <div class="queue-list">
+    {% for q in queue %}
+      <a class="qitem{% if q.id == cur.id %} on{% endif %}{% if q.state == 'kept' %} dim{% endif %}" href="/review?item={{ q.id }}"{% if q.id == cur.id %} aria-current="true"{% endif %}>
+        <span class="qrow"><span class="qguess">{{ q.guess }}</span><span class="badge {{ q.cls }}">{{ q.badge }}</span></span>
+        <span class="mono small muted wrap">{{ q.file }}</span>
+        <span class="small soft">{{ q.reason }}</span>
+      </a>
+    {% endfor %}
+    </div>
+  </aside>
+
+  <main class="item" id="item" data-item="{{ cur.id }}">
+    <section class="panel file" aria-label="The file">
+      <div class="row between">
+        <div class="minw0">
+          <p class="label">File in the Inbox</p>
+          <p class="mono big wrap">{{ cur.file }}</p>
+        </div>
+        <span class="pill {{ 'good' if cur.tv_ok else 'warn' }}">{{ cur.tv }}</span>
+      </div>
+      <div class="row wrap-gap">
+        <span class="muted small">Name after stripping</span>
+        <span class="clean">{{ cur.clean }}</span>
+        {% for r in cur.removed %}<span class="struck mono">{{ r }}</span>{% endfor %}
+      </div>
+      <dl class="facts">
+        {% for k, v in cur.facts %}<div><dt>{{ k }}</dt><dd>{{ v }}</dd></div>{% endfor %}
+      </dl>
+      {% if cur.frames %}
+      <div class="frames">
+        {% for n in cur.frames %}<img src="/frames/{{ cur.id }}/{{ n }}.jpg" alt="Still frame {{ loop.index }} of 4" loading="lazy">{% endfor %}
+      </div>
+      {% endif %}
+      {% if cur.reason %}<p class="why"><strong>Why it waits:</strong> {{ cur.reason }}</p>{% endif %}
+    </section>
+
+    <section class="matches" aria-label="Matches">
+      <div class="row between baseline">
+        <h2 class="h2">Which one is it?</h2>
+        <span class="muted small">{{ cur.hash }}</span>
+      </div>
+      <div id="cards">{% include "_cards.html" %}</div>
+      <form class="panel search" id="search" data-plain>
+        <label class="grow">Search again
+          <input type="search" name="q" placeholder="Name, year, or paste an IMDb / TMDB link" autocomplete="off">
+        </label>
+        <label class="look">Look in
+          <select name="source">
+            <option value="all">All sources</option>
+            {% for key, name in search_sources %}<option value="{{ key }}">{{ name }}{% if key == 'imdb' %} (offline list){% endif %}</option>{% endfor %}
+          </select>
+        </label>
+        <button type="submit" class="btn">Search</button>
+      </form>
+    </section>
+
+    <section class="panel dest" aria-label="Where it goes">
+      <h2 class="label">Where it goes</h2>
+      <p class="mono wrap" id="dest">{{ cur.dest }}</p>
+      <div class="row wrap-gap">{% for x in cur.extras %}<span class="pill">{{ x }}</span>{% endfor %}</div>
+      {% if cur.is_episode and cur.siblings %}
+      <label class="check"><input type="checkbox" id="group" checked> Use the same series for the {{ cur.siblings }} other file{{ 's' if cur.siblings > 1 }} from this folder</label>
+      {% endif %}
+      {% if 'already exists' in cur.reason %}
+      <label class="check"><input type="checkbox" id="replace"> Replace the file that is already there (it goes to the set-aside folder)</label>
+      {% endif %}
+    </section>
+
+    <div class="actions">
+      <button type="button" class="btn primary" data-act="approve">Approve and move</button>
+      <button type="button" class="btn" data-act="keep">Not sure, keep in Inbox</button>
+      <button type="button" class="btn" data-act="junk">Junk, set aside</button>
+      <span class="muted small push" id="status">{{ left }} of {{ total }} still to decide</span>
+    </div>
+  </main>
+</div>
+{% endif %}
+{% endblock %}

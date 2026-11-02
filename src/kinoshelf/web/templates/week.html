@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}This week · Kinoshelf{% endblock %}
+{% block subtitle %}Next move into the library: {{ when }}{% if dry %} (dry run){% endif %}{% endblock %}
+{% block nav %}
+<span class="tab on" aria-current="page">This week</span>
+<a class="tab primary" href="/review">Review {{ unsure }} unsure item{{ 's' if unsure != 1 }}</a>
+{% endblock %}
+{% block body %}
+{% if worker_error %}<p class="note warn">The background worker hit a problem: {{ worker_error }}</p>{% endif %}
+{% if not watching %}<p class="note warn">Watching the Inbox is off: nothing is picked up, renamed or moved. Turn it on in Settings, Watching the Inbox.</p>{% endif %}
+{% if dry %}<p class="note">Dry run is on: the weekly move only writes what it would do. Turn it off in Settings, Rule, when the list below looks right.</p>{% endif %}
+<section class="stats" aria-label="Summary">
+  {% for s in stats %}
+  <a class="stat{% if s.key == panel %} on{% endif %}" href="/week?panel={{ s.key }}"{% if s.key == panel %} aria-current="true"{% endif %}>
+    <span class="n">{{ s.n }}</span><span class="soft">{{ s.label }}</span>
+  </a>
+  {% endfor %}
+</section>
+
+<section class="panel flush" aria-label="{{ title }}">
+  <h2 class="ph">{{ title }}</h2>
+  <div class="scroll">
+    <table class="table">
+      <thead><tr><th>Item</th><th>What happened</th><th>Where</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr><td class="strong">{{ r.item }}</td><td class="soft">{{ r.what }}</td><td class="mono small muted wrap">{{ r.where }}</td></tr>
+      {% else %}
+        <tr><td colspan="3" class="muted">Nothing here this week.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel" aria-label="Rules">
+  <div class="row between baseline"><h2 class="h3">Rules this instance uses</h2><a href="/settings">Change in Settings</a></div>
+  <dl class="rules">
+    {% for k, v, mono in rules %}<div><dt>{{ k }}</dt><dd class="{{ 'mono small' if mono }}">{{ v }}</dd></div>{% endfor %}
+  </dl>
+</section>
+
+<section class="panel" aria-label="Recent moves">
+  <div class="row between baseline">
+    <h2 class="h3">Recent moves</h2>
+    <button type="button" class="btn small" data-post="/api/run/move" data-body='{"dry_run": true}' data-reload>Try a dry run now</button>
+  </div>
+  {% if runs %}
+  <ul class="runs">
+    {% for r in runs %}
+    <li><span class="mono small">{{ r.id }}</span> · {{ r.moved or 0 }} {{ 'would move' if r.dry_run else 'moved' }}, {{ r.problems or 0 }} held back
+      {% if r.undone %}· undone{% elif not r.dry_run and r.moved %}<button type="button" class="link" data-post="/api/run/undo/{{ r.id }}" data-confirm="Put every file of this run back where it was?" data-reload>Undo this run</button>{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted">No move has run yet.</p>{% endif %}
+  <p class="muted small" id="status" role="status"></p>
+</section>
+{% endblock %}

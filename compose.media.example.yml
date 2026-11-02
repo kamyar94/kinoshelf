@@ -1,0 +1,12 @@
+# Copy to compose.media.yml (kept out of git) and list the folders the app may read and write:
+# every Inbox and every library root. In Settings > Folders, tell the app how each one looks to you.
+#
+# Docker on Linux or WSL: Windows drives appear as /mnt/<letter>, e.g. /mnt/m.
+# Docker Desktop on Windows: use the Windows path, e.g. M:/ or D:/Media.
+#
+# Keep each Inbox on the same drive as most of its library: moves within one drive are renames.
+services:
+  app:
+    volumes:
+      - /path/to/drive-one:/media/one
+      - /path/to/drive-two:/media/two

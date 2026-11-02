@@ -1,0 +1,6 @@
+# The app on 127.0.0.1 of the host only: open it in a browser on the host, or from another computer
+# through an SSH tunnel:  ssh -N -L 8484:127.0.0.1:8484 you@the-host   then http://127.0.0.1:8484
+services:
+  app:
+    ports:
+      - "127.0.0.1:${KS_PORT:-8484}:8484"

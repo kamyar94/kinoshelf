@@ -1,0 +1,6 @@
+# The app on one LAN address of the host (set LAN_IP in .env). Anyone on that network reaches the
+# sign-in page, so keep a strong password.
+services:
+  app:
+    ports:
+      - "${LAN_IP:?set LAN_IP in .env}:${KS_PORT:-8484}:8484"

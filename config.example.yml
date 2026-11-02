@@ -1,0 +1,72 @@
+# Kinoshelf settings, as the app keeps them in /data/config.yml. You do not need this file: the
+# Settings page writes config.yml for you. It shows every setting with placeholder values.
+
+paths:
+  # How each folder looks to you and your media server ("shown"), and where it is mounted inside the
+  # container (compose.media.yml). Longest match wins.
+  map:
+    - {shown: 'X:\', container: /media/one, label: X}
+    - {shown: 'Y:\', container: /media/two, label: Y}
+  inbox: ['X:\Inbox']            # watched folders
+  set_aside: _Set aside          # created at the root of each drive; nothing is ever deleted
+  set_aside_parts: {junk: Junk, replaced: Replaced, moved: Moved across drives, empty: Empty folders}
+
+naming:
+  movie: 'X:\Movies\{Title} ({Year})\{Title} ({Year}).{ext}'
+  episode: 'Y:\Series\{Series} ({Year})\Season {SS}\{Series} S{SS}E{EE} - {Episode}.{ext}'
+
+rule:                            # when a file moves without asking
+  min_score: 85
+  max_runtime_diff_pct: 5
+  min_margin: 10
+  dry_run: true                  # start here; turn off when the dry runs look right
+
+schedule: {enabled: true, day: sunday, time: '03:00'}
+
+subtitles: {languages: [en], mark_default: true}
+
+sources:
+  tmdb: {enabled: false, api_key: '', language: en-US}
+  imdb: {enabled: true, refresh_days: 30, include_episodes: false}
+  tvmaze: {enabled: true}
+  omdb: {enabled: false, api_key: ''}
+  opensubtitles: {enabled: false, api_key: '', user_agent: Kinoshelf v0.1.0}
+  jellyfin:
+    enabled: false
+    url: 'http://jellyfin:8096'
+    api_key: ''
+    path_map: []                 # [{from: 'X:\', to: '/media'}] when Jellyfin sees other paths
+
+network: {proxy: '', timeout_seconds: 15}
+
+device:                          # what the playback device plays without conversion
+  name: TV
+  containers: [mp4, mkv, m4v, mov]
+  video_codecs: [h264, hevc, mpeg4, vp9, av1]
+  audio_codecs: [aac, ac3, eac3, mp3]
+  max_height: 2160
+  rewrap_to: mp4
+
+hooks:                           # see docs/HOOKS.md
+  playable:
+    - {name: Device check, kind: command, enabled: true,
+       command: [python, -m, kinoshelf.default_hooks.playable], options: {rewrap: false, convert: false}}
+  subtitles:
+    - {name: Subtitles (subliminal), kind: command, enabled: false,
+       command: [python, -m, kinoshelf.default_hooks.subtitles], options: {}}
+  nfo:
+    - {name: NFO writer, kind: command, enabled: true, command: [python, -m, kinoshelf.default_hooks.nfo]}
+  icon:
+    - {name: Poster as folder.jpg, kind: command, enabled: true, command: [python, -m, kinoshelf.default_hooks.poster]}
+  after_move: []
+
+junk:
+  release_words: [YTS, YIFY, RARBG, ETRG]   # stripped from names before lookup (shortened here)
+  files: ['*.txt', '*.url', '*.exe', 'RARBG*', 'WWW.*', '*.torrent', '*sample*.mkv']
+  sample_max_mb: 150
+
+watcher: {poll_seconds: 30, settle_seconds: 120}
+
+server:                          # addresses for the desktop shortcut
+  public_url: 'https://inbox.example.net'
+  lan_url: 'http://127.0.0.1:8484'

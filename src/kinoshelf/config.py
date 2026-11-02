@@ -1,0 +1,174 @@
+"""Instance settings: built-in defaults, overlaid by /data/config.yml, which the Settings page writes."""
+
+from __future__ import annotations
+
+import copy
+import os
+import threading
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+VIDEO_EXTS = [
+    "mkv", "mp4", "m4v", "avi", "mov", "wmv", "mpg", "mpeg", "ts", "m2ts", "webm", "flv", "divx", "ogm", "vob",
+]
+SUBTITLE_EXTS = ["srt", "ass", "ssa", "sub", "idx", "vtt", "sup"]
+
+DEFAULTS: dict[str, Any] = {
+    "paths": {
+        # How a folder looks to you and to your media server ("shown"), and where the same
+        # folder is mounted inside the container. Longest match wins.
+        "map": [],  # [{"shown": "X:\\", "container": "/media/x", "label": "X"}]
+        "inbox": [],  # Inbox folders, in "shown" form
+        "set_aside": "_Set aside",  # folder at the root of each drive for junk and replaced files
+        "set_aside_parts": {
+            "junk": "Junk",
+            "replaced": "Replaced",
+            "moved": "Moved across drives",
+            "empty": "Empty folders",
+        },
+    },
+    "naming": {
+        "movie": "X:\\Movies\\{Title} ({Year})\\{Title} ({Year}).{ext}",
+        "episode": "X:\\Series\\{Series} ({Year})\\Season {SS}\\{Series} S{SS}E{EE} - {Episode}.{ext}",
+    },
+    "rule": {
+        "min_score": 85,  # best match at least this many percent
+        "max_runtime_diff_pct": 5,  # and its running time within this many percent of the file
+        "min_margin": 10,  # and at least this many points ahead of the next match
+        "dry_run": True,  # the weekly move only writes what it would do
+    },
+    "schedule": {"enabled": True, "day": "sunday", "time": "03:00"},
+    "subtitles": {"languages": ["en"], "mark_default": True},
+    "sources": {
+        "tmdb": {"enabled": False, "api_key": "", "language": "en-US"},
+        "imdb": {"enabled": True, "refresh_days": 30, "include_episodes": False},
+        "tvmaze": {"enabled": True},
+        "omdb": {"enabled": False, "api_key": ""},
+        "opensubtitles": {"enabled": False, "api_key": "", "user_agent": "Kinoshelf v0.1.0"},
+        "jellyfin": {"enabled": False, "url": "", "api_key": "", "path_map": []},
+    },
+    "network": {"proxy": "", "timeout_seconds": 15},
+    "scoring": {
+        "weights": {"title": 35, "runtime": 30, "year": 15},
+        "missing_year": 0.7,  # year check value when the file name has no year
+        "hash_floor": 90,  # a file-hash match lifts the score to at least this
+        "translit": [
+            # Applied to both sides before titles are compared a second time, so Latin
+            # spellings of the same Persian or Arabic word meet. [pattern, replacement]
+            ["ou", "u"], ["oo", "u"], ["ee", "i"], ["gh", "q"], ["kh", "x"],
+            ["aa", "a"], ["ey\\b", "e"], ["iye\\b", "ie"], ["-?ye\\b", "e"], ["w", "v"],
+        ],
+    },
+    "device": {
+        "name": "TV",
+        "containers": ["mp4", "mkv", "m4v", "mov"],
+        "video_codecs": ["h264", "hevc", "mpeg4", "vp9", "av1"],
+        "audio_codecs": ["aac", "ac3", "eac3", "mp3"],
+        "max_height": 2160,
+        "rewrap_to": "mp4",
+    },
+    "hooks": {
+        # Each stage runs its hooks in order. kind: command | http | folder.
+        "playable": [
+            {"name": "Device check", "kind": "command", "enabled": True,
+             "command": ["python", "-m", "kinoshelf.default_hooks.playable"],
+             "options": {"rewrap": False, "convert": False}},
+        ],
+        "subtitles": [
+            {"name": "Subtitles (subliminal)", "kind": "command", "enabled": False,
+             "command": ["python", "-m", "kinoshelf.default_hooks.subtitles"], "options": {}},
+        ],
+        "nfo": [
+            {"name": "NFO writer", "kind": "command", "enabled": True,
+             "command": ["python", "-m", "kinoshelf.default_hooks.nfo"], "options": {}},
+        ],
+        "icon": [
+            {"name": "Poster as folder.jpg", "kind": "command", "enabled": True,
+             "command": ["python", "-m", "kinoshelf.default_hooks.poster"], "options": {}},
+        ],
+        "after_move": [],
+    },
+    "junk": {
+        # Words removed from file names before lookup (case-insensitive, whole words)
+        "release_words": [
+            "YTS", "YIFY", "RARBG", "ETRG", "EVO", "Ganool", "PSA", "Pahe", "MkvCage", "ShAaNiG",
+            "Iran-Film", "IranFilm", "FardaDownload", "Par30dl", "TehMedia", "Film2Movie", "Film2Media",
+            "AvaMovie", "DigiMoviez", "Zardfilm", "UpTVs", "SkyMovie", "Golchindl", "30nama",
+        ],
+        # Files set aside as junk (glob patterns, case-insensitive)
+        "files": [
+            "*.txt", "*.url", "*.nfo.txt", "*.exe", "*.lnk", "*.website", "RARBG*", "WWW.*", "*www.*.*",
+            "Torrent downloaded from*", "*.torrent", "*sample*.mkv", "*sample*.mp4", "*sample*.avi",
+        ],
+        "sample_max_mb": 150,  # a video under this size with "sample" in its name is junk
+        "auto_set_aside": True,  # off: junk files and emptied folders stay where they are
+    },
+    # enabled: off means nothing in the Inbox is picked up, renamed or moved (the pages still work)
+    "watcher": {"enabled": True, "poll_seconds": 30, "settle_seconds": 120},
+    "server": {"public_url": "", "lan_url": ""},
+}
+
+_lock = threading.Lock()
+
+
+def data_dir() -> Path:
+    return Path(os.environ.get("KS_DATA_DIR", "/data"))
+
+
+def deep_merge(base: dict, over: dict) -> dict:
+    out = copy.deepcopy(base)
+    for k, v in (over or {}).items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = deep_merge(out[k], v)
+        else:
+            out[k] = copy.deepcopy(v)
+    return out
+
+
+class Settings:
+    """Settings live in memory; save() writes them back to config.yml (mode 600)."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self.values: dict[str, Any] = copy.deepcopy(DEFAULTS)
+        self.load()
+
+    def load(self) -> None:
+        with _lock:
+            if self.path.exists():
+                raw = yaml.safe_load(self.path.read_text(encoding="utf-8")) or {}
+                self.values = deep_merge(DEFAULTS, raw)
+            else:
+                self.values = copy.deepcopy(DEFAULTS)
+
+    def save(self) -> None:
+        with _lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.path.with_suffix(".tmp")
+            tmp.write_text(
+                "# Kinoshelf settings. The Settings page writes this file.\n"
+                + yaml.safe_dump(self.values, allow_unicode=True, sort_keys=False),
+                encoding="utf-8",
+            )
+            try:
+                os.chmod(tmp, 0o600)
+            except OSError:
+                pass
+            os.replace(tmp, self.path)
+
+    def __getitem__(self, key: str) -> Any:
+        return self.values[key]
+
+    def get(self, dotted: str, default: Any = None) -> Any:
+        cur: Any = self.values
+        for part in dotted.split("."):
+            if not isinstance(cur, dict) or part not in cur:
+                return default
+            cur = cur[part]
+        return cur
+
+    def set_section(self, key: str, value: Any) -> None:
+        self.values[key] = value
+        self.save()

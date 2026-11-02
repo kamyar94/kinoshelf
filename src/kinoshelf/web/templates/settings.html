@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}Settings · Kinoshelf{% endblock %}
+{% block subtitle %}Every change saves by itself{% endblock %}
+{% block nav %}
+<a class="tab" href="/week">This week</a>
+<a class="tab" href="/review">Review</a>
+{% endblock %}
+{% block body %}
+<div class="settings">
+
+<form class="panel" data-section="watcher" aria-labelledby="h-watch">
+  <h2 class="h3" id="h-watch">Watching the Inbox</h2>
+  <label class="check"><input type="checkbox" name="enabled" {% if s.watcher.enabled %}checked{% endif %}> Watch the Inbox folders. Off: nothing is picked up, renamed or moved.</label>
+  <div class="grid3">
+    <label>Wait until a file has not changed for (seconds) <input name="settle_seconds" type="number" min="10" max="3600" value="{{ s.watcher.settle_seconds }}"></label>
+    <label>Look every (seconds) <input name="poll_seconds" type="number" min="5" max="600" value="{{ s.watcher.poll_seconds }}"></label>
+  </div>
+  <p class="status small" role="status"></p>
+</form>
+
+<form class="panel" data-section="paths" aria-labelledby="h-paths">
+  <h2 class="h3" id="h-paths">Folders</h2>
+  <p class="soft small">How each drive or folder looks to you and to your media server, and where it is mounted inside the container (docker-compose.yml).</p>
+  <div class="maprows" data-rows>
+    {% for m in s.paths.map %}
+    <div class="maprow" data-row>
+      <label>Looks like <input name="shown" value="{{ m.shown }}" placeholder="X:\" class="mono"></label>
+      <label>Inside the container <input name="container" value="{{ m.container }}" placeholder="/media/x" class="mono"></label>
+      <label>Label <input name="label" value="{{ m.label }}" placeholder="X" class="mono short"></label>
+    </div>
+    {% endfor %}
+    <div class="maprow" data-row>
+      <label>Looks like <input name="shown" placeholder="X:\" class="mono"></label>
+      <label>Inside the container <input name="container" placeholder="/media/x" class="mono"></label>
+      <label>Label <input name="label" placeholder="X" class="mono short"></label>
+    </div>
+  </div>
+  <label>Inbox folders, one per line <textarea name="inbox" rows="2" class="mono" placeholder="X:\Inbox">{{ s.paths.inbox|join('\n') }}</textarea></label>
+  <label>Set-aside folder at the root of each drive <input name="set_aside" value="{{ s.paths.set_aside }}" class="mono"></label>
+  <p class="status small" role="status"></p>
+</form>
+
+<form class="panel" data-section="naming" aria-labelledby="h-naming">
+  <h2 class="h3" id="h-naming">Naming</h2>
+  <label>Films <input name="movie" value="{{ s.naming.movie }}" class="mono"></label>
+  <p class="preview mono small {{ 'warn' if not preview.movie.ok }}" data-preview="movie">{{ preview.movie.text }}</p>
+  <label>Episodes <input name="episode" value="{{ s.naming.episode }}" class="mono"></label>
+  <p class="preview mono small {{ 'warn' if not preview.episode.ok }}" data-preview="episode">{{ preview.episode.text }}</p>
+  <details><summary class="small">Tokens</summary>
+    <ul class="tokens small">{% for k, v in tokens.items() %}<li><span class="mono">{{ '{' ~ k ~ '}' }}</span> {{ v }}</li>{% endfor %}</ul>
+  </details>
+  <p class="status small" role="status"></p>
+</form>
+
+<form class="panel" data-section="rule" aria-labelledby="h-rule">
+  <h2 class="h3" id="h-rule">When files move without asking</h2>
+  <div class="grid3">
+    <label>Best match at least (%) <input name="min_score" type="number" min="50" max="100" value="{{ s.rule.min_score }}"></label>
+    <label>Running time within (%) <input name="max_runtime_diff_pct" type="number" min="0" max="50" step="0.5" value="{{ s.rule.max_runtime_diff_pct }}"></label>
+    <label>Lead over the next match (points) <input name="min_margin" type="number" min="0" max="50" value="{{ s.rule.min_margin }}"></label>
+  </div>
+  <label class="check"><input type="checkbox" name="dry_run" {% if s.rule.dry_run %}checked{% endif %}> Dry run: the weekly move only writes what it would do</label>
+  <p class="status small" role="status"></p>
+</form>
+
+<form class="panel" data-section="schedule" aria-labelledby="h-schedule">
+  <h2 class="h3" id="h-schedule">Weekly move</h2>
+  <div class="grid3">
+    <label class="check"><input type="checkbox" name="enabled" {% if s.schedule.enabled %}checked{% endif %}> On</label>
+    <label>Day <select name="day">{% for d in days %}<option value="{{ d }}" {% if d == s.schedule.day %}selected{% endif %}>{{ d|capitalize }}</option>{% endfor %}</select></label>
+    <label>Time <input name="time" type="time" value="{{ s.schedule.time }}"></label>
+  </div>
+  <p class="status small" role="status"></p>
+</form>
+
+<form class="panel" data-section="subtitles" aria-labelledby="h-subs">
+  <h2 class="h3" id="h-subs">Subtitles</h2>
+  <label>Languages, first choice first <input name="languages" value="{{ s.subtitles.languages|join(', ') }}" class="mono" placeholder="fa, en"></label>
+  <label class="check"><input type="checkbox" name="mark_default" {% if s.subtitles.mark_default %}checked{% endif %}> Mark the first language found as the default subtitle</label>
+  <p class="status small" role="status"></p>
+</form>
+
+<form class="panel" data-section="sources" data-nested aria-labelledby="h-sources">
+  <h2 class="h3" id="h-sources">Lookup sources</h2>
+  <p class="soft small">Keys stay in this instance's data folder. A saved key is never shown again; leave the box empty to keep it.</p>
+  {% set src = s.sources %}
+  <fieldset><legend>TMDB</legend>
+    <label class="check"><input type="checkbox" name="tmdb.enabled" {% if src.tmdb.enabled %}checked{% endif %}> On</label>
+    <label>API key or read token <input name="tmdb.api_key" type="password" autocomplete="off" placeholder="{{ 'saved' if keys.tmdb else 'not set' }}"></label>
+    <label>Language <input name="tmdb.language" value="{{ src.tmdb.language }}" class="mono short"></label>
+    <button type="button" class="btn small" data-test="tmdb">Test</button>
+  </fieldset>
+  <fieldset><legend>IMDb offline list</legend>
+    <label class="check"><input type="checkbox" name="imdb.enabled" {% if src.imdb.enabled %}checked{% endif %}> On</label>
+    <label>Refresh every (days) <input name="imdb.refresh_days" type="number" min="1" max="365" value="{{ src.imdb.refresh_days }}"></label>
+    <label class="check"><input type="checkbox" name="imdb.include_episodes" {% if src.imdb.include_episodes %}checked{% endif %}> Include episodes (larger)</label>
+    <p class="small muted">{% if imdb.error %}{{ imdb.error }}{% elif imdb.built_at %}Built {{ imdb.built_at }} · {{ imdb.titles or imdb.title_count or '' }} titles{% else %}Not built yet. Files from datasets.imdbws.com can also be put in the data folder's imdb folder by hand.{% endif %}</p>
+    <button type="button" class="btn small" data-post="/api/imdb/update">Update now</button>
+  </fieldset>
+  <fieldset><legend>TVmaze</legend>
+    <label class="check"><input type="checkbox" name="tvmaze.enabled" {% if src.tvmaze.enabled %}checked{% endif %}> On (no key needed)</label>
+    <button type="button" class="btn small" data-test="tvmaze">Test</button>
+  </fieldset>
+  <fieldset><legend>OMDb</legend>
+    <label class="check"><input type="checkbox" name="omdb.enabled" {% if src.omdb.enabled %}checked{% endif %}> On</label>
+    <label>API key <input name="omdb.api_key" type="password" autocomplete="off" placeholder="{{ 'saved' if keys.omdb else 'not set' }}"></label>
+    <button type="button" class="btn small" data-test="omdb">Test</button>
+  </fieldset>
+  <fieldset><legend>OpenSubtitles file hash</legend>
+    <label class="check"><input type="checkbox" name="opensubtitles.enabled" {% if src.opensubtitles.enabled %}checked{% endif %}> On</label>
+    <label>API key <input name="opensubtitles.api_key" type="password" autocomplete="off" placeholder="{{ 'saved' if keys.opensubtitles else 'not set' }}"></label>
+    <label>App name sent to OpenSubtitles <input name="opensubtitles.user_agent" value="{{ src.opensubtitles.user_agent }}" class="mono"></label>
+    <button type="button" class="btn small" data-test="opensubtitles">Test</button>
+  </fieldset>
+  <fieldset><legend>Jellyfin library</legend>
+    <label class="check"><input type="checkbox" name="jellyfin.enabled" {% if src.jellyfin.enabled %}checked{% endif %}> On</label>
+    <label>Address <input name="jellyfin.url" value="{{ src.jellyfin.url }}" class="mono" placeholder="http://jellyfin:8096"></label>
+    <label>API key <input name="jellyfin.api_key" type="password" autocomplete="off" placeholder="{{ 'saved' if keys.jellyfin else 'not set' }}"></label>
+    <button type="button" class="btn small" data-test="jellyfin">Test</button>
+  </fieldset>
+  <p class="status small" role="status"></p>
+</form>
+
+<form class="panel" data-section="network" aria-labelledby="h-net">
+  <h2 class="h3" id="h-net">Network</h2>
+  <div class="grid3">
+    <label>Proxy for lookups (optional) <input name="proxy" value="{{ s.network.proxy }}" class="mono" placeholder="http://host:port"></label>
+    <label>Time limit per lookup (seconds) <input name="timeout_seconds" type="number" min="3" max="120" value="{{ s.network.timeout_seconds }}"></label>
+  </div>
+  <p class="status small" role="status"></p>
+</form>
+
+<form class="panel" data-section="device" aria-labelledby="h-device">
+  <h2 class="h3" id="h-device">Playback device</h2>
+  <p class="soft small">What the device plays without conversion. Names as ffprobe reports them.</p>
+  <div class="grid3">
+    <label>Name <input name="name" value="{{ s.device.name }}"></label>
+    <label>Containers <input name="containers" value="{{ s.device.containers|join(', ') }}" class="mono"></label>
+    <label>Picture codecs <input name="video_codecs" value="{{ s.device.video_codecs|join(', ') }}" class="mono"></label>
+    <label>Sound codecs <input name="audio_codecs" value="{{ s.device.audio_codecs|join(', ') }}" class="mono"></label>
+    <label>Largest picture height <input name="max_height" type="number" value="{{ s.device.max_height }}"></label>
+    <label>Rewrap into <input name="rewrap_to" value="{{ s.device.rewrap_to }}" class="mono short"></label>
+  </div>
+  <p class="status small" role="status"></p>
+</form>
+
+<form class="panel" data-section="hooks" aria-labelledby="h-hooks">
+  <h2 class="h3" id="h-hooks">Hooks</h2>
+  <p class="soft small">Optional steps per stage: playable, subtitles, nfo, icon, after_move. Each hook is a command, an http service or a folder of job files. The protocol is in docs/HOOKS.md.</p>
+  <label>Hooks (YAML) <textarea name="yaml" rows="14" class="mono" spellcheck="false">{{ hooks_yaml }}</textarea></label>
+  <p class="status small" role="status"></p>
+</form>
+
+<form class="panel" data-section="junk" aria-labelledby="h-junk">
+  <h2 class="h3" id="h-junk">Junk</h2>
+  <div class="grid2">
+    <label>Words stripped from names, one per line <textarea name="release_words" rows="8" class="mono">{{ s.junk.release_words|join('\n') }}</textarea></label>
+    <label>Files set aside as junk, one pattern per line <textarea name="files" rows="8" class="mono">{{ s.junk.files|join('\n') }}</textarea></label>
+  </div>
+  <label>A video with "sample" in its name is junk under (MB) <input name="sample_max_mb" type="number" min="1" value="{{ s.junk.sample_max_mb }}"></label>
+  <label class="check"><input type="checkbox" name="auto_set_aside" {% if s.junk.auto_set_aside %}checked{% endif %}> Set junk files and emptied folders aside by themselves. Off: they stay where they are.</label>
+  <p class="status small" role="status"></p>
+</form>
+
+<form class="panel" data-section="server" aria-labelledby="h-server">
+  <h2 class="h3" id="h-server">Desktop shortcut</h2>
+  <div class="grid2">
+    <label>Address through Cloudflare <input name="public_url" value="{{ s.server.public_url }}" class="mono" placeholder="https://inbox.example.net"></label>
+    <label>Address on the home network or SSH tunnel <input name="lan_url" value="{{ s.server.lan_url }}" class="mono" placeholder="http://127.0.0.1:8484"></label>
+  </div>
+  <p class="row wrap-gap"><a class="btn small" href="/shortcut.url?target=public" download>Shortcut for the Cloudflare address</a><a class="btn small" href="/shortcut.url?target=lan" download>Shortcut for the home address</a></p>
+  <p class="status small" role="status"></p>
+</form>
+
+<form class="panel" data-account aria-labelledby="h-account">
+  <h2 class="h3" id="h-account">Account</h2>
+  <div class="grid2">
+    <label>Current password <input name="current" type="password" autocomplete="current-password"></label>
+    <label>New password (10 or more characters) <input name="new" type="password" autocomplete="new-password" minlength="10"></label>
+  </div>
+  <button type="submit" class="btn small">Change password</button>
+  <p class="status small" role="status"></p>
+</form>
+
+<section class="panel" aria-labelledby="h-now">
+  <h2 class="h3" id="h-now">Run now</h2>
+  <p class="row wrap-gap">
+    <button type="button" class="btn small" data-post="/api/run/scan">Look in the Inbox now</button>
+    <button type="button" class="btn small" data-post="/api/run/move" data-body='{"dry_run": true}'>Dry run of the move</button>
+    <button type="button" class="btn small" data-post="/api/run/move" data-body='{"dry_run": false}' data-confirm="Move every ready file into the library now?">Move ready files now</button>
+  </p>
+  <p class="status small" role="status"></p>
+</section>
+
+</div>
+{% endblock %}

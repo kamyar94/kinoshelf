@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf" content="{{ csrf }}">
+<title>{% block title %}Kinoshelf{% endblock %}</title>
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/app.css?v={{ version }}">
+<script src="/static/app.js?v={{ version }}" defer></script>
+</head>
+<body>
+<div class="page">
+<header class="top">
+  <a class="brand" href="/review">
+    <span class="logo" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"></path><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg></span>
+    <span><span class="h1">Kinoshelf</span><span class="sub">{% block subtitle %}{% endblock %}</span></span>
+  </a>
+  {% if user %}
+  <nav class="views" aria-label="Views">
+    {% block nav %}{% endblock %}
+    <a class="tab{% if nav == 'settings.html' %} on{% endif %}" href="/settings">Settings</a>
+    <form method="post" action="/logout" class="inline" data-plain><button class="tab ghost" type="submit">Sign out</button></form>
+  </nav>
+  {% endif %}
+</header>
+{% block body %}{% endblock %}
+<footer class="foot">Kinoshelf {{ version }} · created by Kamyar Fatemifar (<a href="https://github.com/kamyar94" rel="noopener">github.com/kamyar94</a>) · <a href="/licence">licence</a></footer>
+</div>
+</body>
+</html>

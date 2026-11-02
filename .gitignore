@@ -1,0 +1,30 @@
+# Local notes and drafts (may name real paths or people)
+PLAN.md
+PROGRESS.md
+_drafts/
+
+# Instance data and secrets
+data/
+.env
+cloudflared.env
+compose.media.yml
+backups/
+*.sqlite
+*.sqlite-*
+*.db
+
+# Fonts are fetched at build time (scripts/fetch-fonts.sh), not stored here
+src/kinoshelf/web/static/fonts/*.woff2
+src/kinoshelf/web/static/fonts/OFL.txt
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+
+# Test output
+.test-tmp/
