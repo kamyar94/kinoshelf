@@ -29,12 +29,13 @@ you. Each card shows the checks behind its score; the destination path follows t
 
 ![Review page](docs/screenshots/review.png)
 
-| This week | Settings | On a phone |
-|---|---|---|
-| ![This week](docs/screenshots/week.png) | ![Settings](docs/screenshots/settings.png) | ![Review page on a phone](docs/screenshots/review-phone.png) |
+| This week | Settings > Network | Settings > Updates | On a phone |
+|---|---|---|---|
+| ![This week](docs/screenshots/week.png) | ![Network settings after Test connections](docs/screenshots/settings.png) | ![Updates settings](docs/screenshots/updates.png) | ![Review page on a phone](docs/screenshots/review-phone.png) |
 
 Taken from a demo instance: generated test-pattern videos, live TVmaze lookups (no other keys),
-posters left out.
+posters left out. The Network panel went through a local test proxy that blocks two sources on
+purpose; the Updates history is from the end-to-end test, where a broken release was rolled back.
 
 ## Contents
 
@@ -45,6 +46,7 @@ posters left out.
 - [The weekly move](#the-weekly-move)
 - [Sources and keys](#sources-and-keys)
 - [Network](#network)
+- [Updates](#updates)
 - [Hooks](#hooks)
 - [Backups](#backups)
 - [Development](#development)
@@ -62,7 +64,8 @@ cp compose.media.example.yml compose.media.yml    # list your drives or folders
 sh scripts/start.sh                               # Windows: .\scripts\Start.ps1
 ```
 
-`scripts/start.sh` builds the image, starts the app and prints the **setup code** from the log.
+`scripts/start.sh` builds the image (the first time, or with `--build`), starts the app and the
+updater, and prints the **setup code** from the log.
 Open http://127.0.0.1:8484, enter the code, and create your account (one admin; the code works
 once). Then, in **Settings**:
 
@@ -73,6 +76,9 @@ once). Then, in **Settings**:
 4. **When files move without asking**: the confidence rule. **Dry run** is on at first: the weekly
    move only writes what it would do. Turn it off when the dry runs look right.
 5. **Desktop shortcut**: the address you use, then download a `.url` shortcut for the desktop.
+
+Updates are on: set up the small host step from [docs/UPDATES.md](docs/UPDATES.md) (one cron line or
+scheduled task) and new versions install by themselves.
 
 The data folder `./data` holds the database, your settings and keys, the journals and cached frames
 and posters. It must be writable by the PUID user.
@@ -174,6 +180,17 @@ The proxy's address, username and password are write-only on the page (it shows 
 set), and they stay out of the log, hook jobs and backups. The sidecar's server details live only in
 `route/config.json` on the host, which the app never reads. Details in
 [docs/NETWORK.md](docs/NETWORK.md).
+
+## Updates
+
+Every change pushed to `main` builds a signed image on GitHub's container registry. The `updater`
+service checks it every few hours (or when you press **Check now** or **Update now** in Settings >
+Updates), downloads it by digest and checks every part. A host step run by a timer
+(`scripts/update/apply.sh`) loads it, keeps the running image as the previous one, restarts, makes sure
+the app answers with the new version, and goes back to the previous image and settings when it does
+not. Every update is written to `data/update/journal.jsonl` and shown in Settings. No container gets the
+Docker socket. Off by one switch; details, the security reasoning and the host step for Linux, WSL and
+Docker Desktop in [docs/UPDATES.md](docs/UPDATES.md).
 
 ## Hooks
 

@@ -11,7 +11,13 @@ COPY scripts/fetch-fonts.sh /fetch-fonts.sh
 RUN sh /fetch-fonts.sh /fonts
 
 FROM ${PYTHON_IMAGE}
-ENV PYTHONDONTWRITEBYTECODE=1 \
+# The commit this image was built from; the updater compares it with the registry's newest image.
+ARG KS_REVISION=""
+LABEL org.opencontainers.image.source="https://github.com/kamyar94/kinoshelf" \
+      org.opencontainers.image.title="Kinoshelf" \
+      org.opencontainers.image.licenses="LicenseRef-KF-SA-1.0"
+ENV KS_REVISION=${KS_REVISION} \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \

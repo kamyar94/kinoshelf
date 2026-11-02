@@ -29,17 +29,19 @@ for _name in ("httpx", "httpcore"):
     logging.getLogger(_name).setLevel(logging.WARNING)
 
 # The sources, in page order, and the internet hosts each one uses (posters follow their source).
-SOURCES = ["tmdb", "imdb", "tvmaze", "omdb", "opensubtitles", "jellyfin"]
+SOURCES = ["tmdb", "imdb", "tvmaze", "omdb", "opensubtitles", "jellyfin", "updates"]
 SOURCE_NAMES = {"tmdb": "TMDB", "imdb": "IMDb datasets", "tvmaze": "TVmaze", "omdb": "OMDb",
-                "opensubtitles": "OpenSubtitles", "jellyfin": "Jellyfin"}
+                "opensubtitles": "OpenSubtitles", "jellyfin": "Jellyfin", "updates": "Updates"}
 DEFAULT_USE = {"tmdb": True, "imdb": True, "tvmaze": True, "omdb": True, "opensubtitles": True,
-               "jellyfin": False}  # Jellyfin is normally on the home network
+               "jellyfin": False,  # Jellyfin is normally on the home network
+               "updates": True}  # the updater container's image registry
 HOSTS = {
     "api.themoviedb.org": "tmdb", "image.tmdb.org": "tmdb",
     "datasets.imdbws.com": "imdb",
     "api.tvmaze.com": "tvmaze", "static.tvmaze.com": "tvmaze",
     "www.omdbapi.com": "omdb", "omdbapi.com": "omdb", "m.media-amazon.com": "omdb", "ia.media-imdb.com": "omdb",
     "api.opensubtitles.com": "opensubtitles",
+    "ghcr.io": "updates", "pkg-containers.githubusercontent.com": "updates",  # image and its layers
 }
 KINDS = {"http": "http", "socks5": "socks5h"}  # socks5h: the proxy looks names up, not this computer
 _ADDRESS = re.compile(r"^(?:\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?):(\d{1,5})$")
@@ -192,6 +194,10 @@ class Net:
 
     def client_for(self, url: str) -> httpx.Client:
         return self._proxied if self.via_proxy(url) and self._proxied is not None else self._direct
+
+    def proxy_for(self, url: str) -> str | None:
+        """The proxy URL for this request, for a helper program (never shown or logged)."""
+        return self._proxy if self.via_proxy(url) else None
 
     def hook_env(self) -> dict[str, str]:
         """Environment for command hooks inside the container (never for http or folder hooks)."""

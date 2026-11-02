@@ -261,6 +261,29 @@
     });
   }
 
+  // ---- settings: Updates. The buttons leave a request for the updater; the summary refreshes a few times.
+  var upd = document.querySelector("form[data-upd]");
+  if (upd) {
+    var updOut = upd.querySelector(".status");
+    var updPanel = upd.querySelector("[data-upd-panel]");
+    var refresh = function (left) {
+      fetch("/api/update/panel", { credentials: "same-origin" }).then(function (r) { return r.ok ? r.text() : ""; })
+        .then(function (html) { if (html) { updPanel.innerHTML = html; } })
+        .catch(function () {}).then(function () {
+          if (left > 0) { window.setTimeout(function () { refresh(left - 1); }, 5000); }
+        });
+    };
+    upd.querySelectorAll("[data-upd-ask]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        b.disabled = true;
+        post("/api/update/" + b.getAttribute("data-upd-ask")).then(function (j) {
+          say(updOut, j.note, "ok");
+          refresh(12);
+        }).catch(function (e) { say(updOut, e.message, "err"); }).then(function () { b.disabled = false; });
+      });
+    });
+  }
+
   var acct = document.querySelector("form[data-account]");
   if (acct) {
     acct.addEventListener("submit", function (ev) {

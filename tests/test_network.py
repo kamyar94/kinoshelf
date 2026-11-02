@@ -198,7 +198,7 @@ def test_command_hooks_get_the_route_in_their_environment(tmp_path):
         "ok=os.environ.get('KS_PROXY')=='http://route:10809' and os.environ.get('KS_PROXY_USE')=='tmdb'\n"
         "print(json.dumps({'status':'done' if ok else 'failed','message':'checked'}))\n")
     net = Net("http://route:10809", use={"tmdb": True, "imdb": False, "tvmaze": False, "omdb": False,
-                                         "opensubtitles": False})
+                                         "opensubtitles": False, "updates": False})
     body = {"protocol": 1, "stage": "icon", "item": {"id": 1}, "settings": {}, "options": {}}
     assert run_command({"command": [sys.executable, str(script)]}, body, tmp_path, net.hook_env())["status"] == "done"
     assert run_command({"command": [sys.executable, str(script)]}, body, tmp_path, None)["status"] == "failed"

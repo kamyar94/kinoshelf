@@ -1,0 +1,26 @@
+<div class="upd-top">
+  <div class="upd-state{{ '' if upd.ok else ' warn' }}">
+    <span class="upd-title"><span class="dot {{ 'good' if upd.ok else 'warn' }}" aria-hidden="true"></span>{{ upd.title }}</span>
+    <span class="small soft">{{ upd.text }}</span>
+  </div>
+  <dl class="upd-facts">
+    {% for k, v in upd.facts %}<div><dt>{{ k }}</dt><dd>{{ v }}</dd></div>{% endfor %}
+  </dl>
+</div>
+<section class="upd-history" aria-label="History">
+  <h3 class="label">History</h3>
+  {% if upd.history %}
+  <ul class="netres">
+    {% for h in upd.history %}
+    <li class="netrow">
+      <span class="mono small upd-when">{{ h.when }}</span>
+      <span class="badge {{ 'good' if h.ok else 'warn' }}">{{ h.result }}</span>
+      <span class="strong upd-what">{{ h.what }}</span>
+      <span class="small soft nr-why">{{ h.why }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty-box small">No update has been installed yet.</p>
+  {% endif %}
+</section>

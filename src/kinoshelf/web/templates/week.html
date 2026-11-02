@@ -37,6 +37,7 @@
   <div class="row between baseline"><h2 class="h3">Rules this instance uses</h2><a href="/settings">Change in Settings</a></div>
   <dl class="rules">
     {% for k, v, mono in rules %}<div><dt>{{ k }}</dt><dd class="{{ 'mono small' if mono }}">{{ v }}</dd></div>{% endfor %}
+    <div><dt>Updates</dt><dd>{{ updates }}</dd></div>
   </dl>
 </section>
 

@@ -34,6 +34,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("set-password", help="set a new password (and create the account if none exists)")
     p.add_argument("username")
     sub.add_parser("imdb-update", help="download and index the IMDb datasets now")
+    a = sub.add_parser("update-agent", help="check for and fetch new images (runs in the updater container)")
+    a.add_argument("--once", action="store_true", help="check once and stop")
     args = ap.parse_args(argv)
     logging.basicConfig(level=os.environ.get("KS_LOG_LEVEL", "INFO"),
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -48,6 +50,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "backup":
         print(backup(Path(args.to) if args.to else None))
+        return 0
+    if args.cmd == "update-agent":
+        from .config import Settings
+        from .updater import Agent
+
+        agent = Agent(data_dir(), Settings(data_dir() / "config.yml"))
+        if args.once:
+            print(json.dumps(agent.run_once(), indent=1))
+        else:
+            agent.loop()
         return 0
 
     from .web import App

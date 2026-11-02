@@ -18,7 +18,11 @@ if echo "${COMPOSE_PROFILES:-}" | grep -q route; then
   chmod 700 route; chmod 600 route/config.json
 fi
 chmod 600 .env 2>/dev/null || true
-docker compose build
+# Build only when there is no image yet, or when asked (sh scripts/start.sh --build). With updates on, the updater
+# keeps kinoshelf:local current; a build from an older checkout would go back in time until the next update.
+if [ "${1:-}" = "--build" ] || ! docker image inspect kinoshelf:local >/dev/null 2>&1; then
+  docker compose build
+fi
 docker compose up -d
 sleep 3
 if ! docker compose exec -T app python -c "import sqlite3;c=sqlite3.connect('/data/kinoshelf.sqlite');exit(0 if c.execute('select 1 from users limit 1').fetchone() else 1)" 2>/dev/null; then

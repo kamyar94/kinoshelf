@@ -1,6 +1,6 @@
 [project]
 name = "kinoshelf"
-version = "0.1.1"
+version = "0.1.2"
 description = "Self-hosted inbox that names, checks and files new films and episodes into a media library."
 readme = "README.md"
 license = "LicenseRef-KF-SA-1.0"

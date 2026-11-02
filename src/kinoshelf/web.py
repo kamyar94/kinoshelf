@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import re
 import time
 from pathlib import Path
@@ -27,6 +28,7 @@ from .naming import TOKENS, TemplateError, fields_for, render
 from .net import DEFAULT_USE, SOURCE_NAMES, SOURCES, check_address, parse_proxy_url
 from .paths import PathError, PathMap
 from .pipeline import Engine
+from . import updater
 from .worker import Worker
 
 log = logging.getLogger(__name__)
@@ -35,7 +37,7 @@ COOKIE = "ks_session"
 POSTER_HOSTS = {"image.tmdb.org", "static.tvmaze.com", "m.media-amazon.com", "ia.media-imdb.com"}
 DEFAULT_PROXY = DEFAULTS["network"]["proxy"]
 SECTIONS = ["paths", "naming", "rule", "schedule", "subtitles", "sources", "network", "device", "hooks", "junk",
-            "server", "watcher"]
+            "server", "watcher", "update"]
 
 
 class App:
@@ -109,7 +111,8 @@ def create_app(core: App | None = None) -> FastAPI:
     # ------------------------------------------------------------ sign-in
     @app.get("/api/health")
     def health():
-        return {"ok": True, "version": __version__, "worker": core.worker.is_alive()}
+        return {"ok": True, "version": __version__, "revision": os.environ.get("KS_REVISION", ""),
+                "worker": core.worker.is_alive()}
 
     @app.get("/setup", response_class=HTMLResponse)
     def setup_page(request: Request):
@@ -277,6 +280,7 @@ def create_app(core: App | None = None) -> FastAPI:
         return page(request, "week.html", stats=stats, panel=panel, title=panels[panel][0], rows=panels[panel][1],
                     when=when, rules=_rules(core), runs=runs, unsure=len(panels["unsure"][1]),
                     dry=core.settings.get("rule.dry_run", True), worker_error=core.worker.last_error,
+                    updates=updater.view(core.data_dir, core.settings)["week"],
                     watching=core.settings.get("watcher.enabled", True))
 
     @app.post("/api/run/move")
@@ -306,7 +310,8 @@ def create_app(core: App | None = None) -> FastAPI:
         imdb = next((x for x in core.engine.identifier.sources["titles"] if x.key == "imdb"), None)
         return page(request, "settings.html", s=s, keys=_key_state(s), tokens=TOKENS, days=DAYS,
                     hooks_yaml=yaml.safe_dump(s.get("hooks", {}), allow_unicode=True, sort_keys=False),
-                    imdb=_try_status(imdb), preview=_previews(core), net=_net_view(s))
+                    imdb=_try_status(imdb), preview=_previews(core), net=_net_view(s),
+                    upd=updater.view(core.data_dir, core.settings))
 
     @app.post("/api/settings/{section}")
     async def save_section(section: str, request: Request):
@@ -324,6 +329,19 @@ def create_app(core: App | None = None) -> FastAPI:
         if section == "network":
             out["set"] = _net_view(core.settings.values)["set"]  # which secrets are saved, never what
         return out
+
+    @app.post("/api/update/{action}")
+    def update_request(action: str):
+        try:
+            updater.request(core.data_dir, action)
+        except ValueError:
+            return JSONResponse({"error": "Unknown request"}, status_code=404)
+        return {"ok": True, "note": "Asked the updater. It answers within a minute."
+                if action == "check" else "Asked the updater to fetch the newest image; the host step installs it."}
+
+    @app.get("/api/update/panel", response_class=HTMLResponse)
+    def update_panel(request: Request):
+        return tpl.TemplateResponse(request, "_updates.html", {"upd": updater.view(core.data_dir, core.settings)})
 
     @app.post("/api/network/test", response_class=HTMLResponse)
     def network_test(request: Request):
@@ -507,7 +525,7 @@ def _rules(core: App) -> list[tuple[str, str, bool]]:
 
 SOURCE_HINTS = {"tmdb": "titles and posters", "imdb": "the offline list download", "tvmaze": "series and posters",
                 "omdb": "second opinion", "opensubtitles": "file hash",
-                "jellyfin": "a local address always goes direct"}
+                "jellyfin": "a local address always goes direct", "updates": "new versions, for the updater"}
 SECRET_FIELDS = ("address", "username", "password")
 
 
@@ -707,6 +725,14 @@ def _validate(core: App, section: str, body: dict):
         cur.update(enabled=bool(body.get("enabled")),
                    settle_seconds=int(_num(body.get("settle_seconds", 120), 10, 3600, "Wait before picking up")),
                    poll_seconds=int(_num(body.get("poll_seconds", 30), 5, 600, "Look every")))
+        return cur, note
+    if section == "update":
+        channel = str(body.get("channel", cur.get("channel", "latest")))
+        if channel not in updater.CHANNEL_TAGS:
+            raise ValueError("Pick a channel: every change or releases only")
+        cur.update(enabled=bool(body.get("enabled")), channel=channel,
+                   interval_hours=_num(body.get("interval_hours", cur.get("interval_hours", 6)), 1, 168,
+                                       "Check every"))
         return cur, note
     if section == "server":
         for k in ("public_url", "lan_url"):

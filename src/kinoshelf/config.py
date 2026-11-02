@@ -120,6 +120,17 @@ DEFAULTS: dict[str, Any] = {
     # enabled: off means nothing in the Inbox is picked up, renamed or moved (the pages still work)
     "watcher": {"enabled": True, "poll_seconds": 30, "settle_seconds": 120},
     "server": {"public_url": "", "lan_url": ""},
+    # Updates (docs/UPDATES.md): the updater container fetches and checks new images; a host step applies them.
+    "update": {
+        "enabled": True,  # install new versions by themselves; off: only when you press Update now
+        "interval_hours": 6,
+        "channel": "latest",  # latest: every change on main; stable: tagged releases
+        "image": "ghcr.io/kamyar94/kinoshelf",
+        "verify": "digest",  # digest: every part checked against its digest; cosign: also the signature
+        "cosign_identity": "^https://github.com/kamyar94/kinoshelf/",
+        "allow_downgrade": False,
+        "insecure_registry": False,  # plain http, only for a registry on this computer or network (tests)
+    },
 }
 
 _lock = threading.Lock()

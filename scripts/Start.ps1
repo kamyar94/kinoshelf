@@ -1,6 +1,7 @@
 # Docker Desktop on Windows: checks the setup, locks the secret file, builds and starts.
 # Refuses to open a tunnel without Cloudflare Access settings.
 #   powershell -ExecutionPolicy Bypass -File .\scripts\Start.ps1
+param([switch]$Build)
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
 if (-not (Test-Path .env)) { throw 'Copy .env.example to .env first.' }
@@ -25,7 +26,10 @@ if (($envVars['COMPOSE_PROFILES'] + '') -match 'route') {
     # Only the current user (and SYSTEM) may read the sidecar's server details.
     icacls route\config.json /inheritance:r /grant:r "$($env:USERNAME):(R,W)" /grant:r 'SYSTEM:(F)' | Out-Null
 }
-docker compose build
+# Build only when there is no image yet, or when asked (-Build). With updates on, the updater keeps
+# kinoshelf:local current; a build from an older checkout would go back in time until the next update.
+docker image inspect kinoshelf:local *> $null
+if ($Build -or $LASTEXITCODE -ne 0) { docker compose build }
 docker compose up -d
 Start-Sleep -Seconds 3
 $log = docker compose logs app 2>$null | Select-String 'setup code' | Select-Object -Last 1

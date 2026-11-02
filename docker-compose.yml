@@ -8,11 +8,14 @@
 #                       through Cloudflare without a valid Cloudflare Access token
 #   profile "route"     an Xray sidecar for lookups on a filtered network (docs/NETWORK.md); its
 #                       config stays in ./route/config.json on the host, which the app never reads
+# Updates (docs/UPDATES.md): the updater service fetches and checks new images; scripts/update/apply.sh, run by a
+# timer on the host, installs them. No container gets the Docker socket.
 # Your media folders are mounted in compose.media.yml (copy compose.media.example.yml).
 #
 #   app     (tunnel + app-out nets)    web app and worker, data in ./data, media mounted read-write
 #   tunnel  (tunnel + tunnel-out nets) Cloudflare Tunnel connector, token only in cloudflared.env
 #   route   (route + route-out nets)   Xray sidecar, server details only in ./route/config.json
+#   updater (app-out + route nets)     same image, `kinoshelf update-agent`: registry checks and downloads only
 
 name: kinoshelf
 
@@ -61,6 +64,37 @@ services:
     memswap_limit: 2g
     cpus: 2.0
     pids_limit: 256
+
+  updater:
+    <<: *hardening
+    image: kinoshelf:local
+    pull_policy: never
+    container_name: kinoshelf-updater
+    command: ["kinoshelf", "update-agent"]
+    user: "${PUID:?set PUID in .env}:${PGID:?set PGID in .env}"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    environment:
+      - KS_DATA_DIR=/data
+      - HOME=/tmp
+    volumes:
+      - ./data:/data   # reads the settings; writes only data/update (status and the fetched archive)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - app-out
+      - route
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json,time;d=json.load(open('/data/update/agent.json'));exit(0 if time.time()-d['heartbeat']<300 else 1)"]
+      interval: 120s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.0
+    pids_limit: 64
 
   tunnel:
     <<: *hardening

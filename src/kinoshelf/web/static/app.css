@@ -178,6 +178,22 @@ legend { padding: 0 6px; font-weight: 600; color: var(--soft); }
 .nr-ms { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; color: var(--soft); }
 .nr-why { flex: 1 1 260px; min-width: 0; }
 .dot.warn { background: var(--warn); } .dot.none { background: var(--dim); }
+
+/* settings: updates */
+.upd { gap: 16px; }
+.upd-top { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); }
+.upd-state { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 10px; border: 2px solid var(--line); background: var(--raised); }
+.upd-state.warn { border-color: var(--warn); }
+.upd-title { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600; }
+.upd-title .dot { width: 10px; height: 10px; flex: none; }
+.upd-facts { margin: 0; display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.upd-facts div { background: var(--raised); border-radius: 8px; padding: 8px 12px; min-width: 0; }
+.upd-facts dt { color: var(--muted); font-size: 12px; }
+.upd-facts dd { margin: 2px 0 0; font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.upd-history { display: flex; flex-direction: column; gap: 8px; }
+.upd-when { flex: 0 0 120px; color: var(--soft); font-variant-numeric: tabular-nums; }
+.upd-what { flex: 1 1 160px; min-width: 0; font-size: 14px; }
+.upd-how { gap: 10px 16px; }
 .netrow .dot { width: 10px; height: 10px; flex: none; }
 
 /* week */

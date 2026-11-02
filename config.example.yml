@@ -41,7 +41,7 @@ network:                         # Settings > Network; see docs/NETWORK.md
   mode: direct                   # direct | proxy | route (the optional Xray sidecar)
   proxy: {kind: http, address: '', username: '', password: ''}   # secrets: write-only on the page
   route_url: 'http://route:10809'
-  use: {tmdb: true, imdb: true, tvmaze: true, omdb: true, opensubtitles: true, jellyfin: false}
+  use: {tmdb: true, imdb: true, tvmaze: true, omdb: true, opensubtitles: true, jellyfin: false, updates: true}
   timeout_seconds: 15
 
 device:                          # what the playback device plays without conversion
@@ -71,6 +71,14 @@ junk:
   sample_max_mb: 150
 
 watcher: {poll_seconds: 30, settle_seconds: 120}
+
+update:                          # Settings > Updates; see docs/UPDATES.md
+  enabled: true                  # install new versions by themselves (the host step applies them)
+  interval_hours: 6
+  channel: latest                # latest: every change on main; stable: tagged releases
+  image: ghcr.io/kamyar94/kinoshelf
+  verify: digest                 # digest, or cosign to check the signature too
+  allow_downgrade: false
 
 server:                          # addresses for the desktop shortcut
   public_url: 'https://inbox.example.net'

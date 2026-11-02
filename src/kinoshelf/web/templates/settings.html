@@ -192,6 +192,29 @@
   <p class="status small" role="status"></p>
 </form>
 
+<form class="panel upd" data-section="update" data-upd aria-labelledby="h-upd">
+  <div class="stack tight">
+    <h2 class="h3" id="h-upd">Updates</h2>
+    <p class="soft small measure">New versions install by themselves. The updater fetches the image and checks its digest; a small step on this computer switches over, makes sure the app answers, and goes back to the previous version when it does not.</p>
+  </div>
+  <div data-upd-panel aria-live="polite">{% include "_updates.html" %}</div>
+  <div class="row wrap-gap">
+    <button type="button" class="btn primary" data-upd-ask="update">Update now</button>
+    <button type="button" class="btn" data-upd-ask="check">Check now</button>
+  </div>
+  <fieldset class="upd-how">
+    <legend>How it updates</legend>
+    <label class="check"><input type="checkbox" name="enabled" {% if upd.enabled %}checked{% endif %}> Install updates by themselves</label>
+    <label>Check every (hours) <input name="interval_hours" type="number" min="1" max="168" value="{{ upd.interval }}" class="short"></label>
+    <label>Channel <select name="channel">
+      <option value="latest" {% if upd.channel == 'latest' %}selected{% endif %}>Every change (latest)</option>
+      <option value="stable" {% if upd.channel == 'stable' %}selected{% endif %}>Releases only (stable)</option>
+    </select></label>
+  </fieldset>
+  <p class="small muted">Image <span class="mono">{{ upd.image }}</span>. The step on this computer and what it needs are in docs/UPDATES.md.</p>
+  <p class="status small" role="status"></p>
+</form>
+
 <form class="panel" data-section="device" aria-labelledby="h-device">
   <h2 class="h3" id="h-device">Playback device</h2>
   <p class="soft small">What the device plays without conversion. Names as ffprobe reports them.</p>

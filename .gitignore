@@ -18,6 +18,14 @@ backups/
 src/kinoshelf/web/static/fonts/*.woff2
 src/kinoshelf/web/static/fonts/OFL.txt
 
+# Never published: generated folder icons and their files, comparison sheets, library pictures
+*.ico
+desktop.ini
+FolderIcon_*
+*comparison*sheet*
+posters/
+frames/
+
 # Python
 __pycache__/
 *.py[cod]

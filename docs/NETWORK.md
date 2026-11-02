@@ -24,8 +24,9 @@ Under **Sources that use it** you choose which sources take the proxy or the sid
 by default because it is normally on your own network, and an address on your own network (a
 private or loopback IP, `localhost`, a one-word name such as a Docker service, or a name ending in
 `.local`, `.lan` or `.home.arpa`) always goes direct, whatever the toggle says: a proxy cannot reach
-your LAN. Posters follow their source (TMDB posters go the way TMDB goes). Hooks of the http kind are
-your own services and are always reached directly.
+your LAN. Posters follow their source (TMDB posters go the way TMDB goes). **Updates** is the updater
+container's image registry (`ghcr.io` and `pkg-containers.githubusercontent.com`, see
+[UPDATES.md](UPDATES.md)). Hooks of the http kind are your own services and are always reached directly.
 
 Kinoshelf ignores the `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` environment variables: the Network
 settings are the one place that decides.
