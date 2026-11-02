@@ -49,6 +49,7 @@ POLICIES = {
     "dub_words": ["dubbed", "dub"],  # release-name words that mark a dubbed copy
     "hardsub_label": "{Lang} Hardsub",
     "hold_copies": True,  # a copy of something already filed waits on the review page
+    "artwork": True,  # pictures that came with a new film get poster / backdrop / disc names
 }
 PICTURE = ["2160p", "1080p", "720p", "576p", "480p"]
 QUALITY_WORDS = [(re.compile(r"(?i)(2160p|\b4k\b|\buhd\b)"), "2160p"), (re.compile(r"(?i)1080[pi]"), "1080p"),

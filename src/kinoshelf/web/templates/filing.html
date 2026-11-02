@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Filing rules · Kinoshelf{% endblock %}
+{% block subtitle %}Settings · Filing rules · every change saves by itself{% endblock %}
+{% block nav %}
+<a class="tab" href="/week">This week</a>
+<a class="tab" href="/review">Review</a>
+{% endblock %}
+{% block body %}
+<script type="application/json" id="filing-data">{{ {"filing": cfg, "policies": policies, "preview": preview}|tojson }}</script>
+<div class="filing" data-filing>
+  <section class="panel fl-list" aria-labelledby="h-rules">
+    <div class="stack tight">
+      <h2 class="h3" id="h-rules">Filing rules</h2>
+      <p class="soft small">Tried from the top: the first rule that fits an item decides where it goes.</p>
+    </div>
+    <label class="check"><input type="checkbox" id="fl-enabled"> Use filing rules (off: the two naming templates)</label>
+    <ol class="fl-rules" id="fl-rules" aria-label="Rules"></ol>
+    <div class="row wrap-gap">
+      <button type="button" class="btn primary small" id="fl-add">Add rule</button>
+      <label class="fl-preset">Start from a preset
+        <select id="fl-preset"><option value="">Pick one…</option><option value="standard">Standard (Jellyfin, Plex, Kodi)</option><option value="by-language">Split by original language</option></select>
+      </label>
+      <label class="fl-preset" id="fl-lang-box" hidden>Language code <input id="fl-lang" class="mono short" placeholder="ja"></label>
+    </div>
+    <div class="row wrap-gap">
+      <a class="btn small" href="/api/filing/export" download>Export YAML</a>
+      <button type="button" class="btn small" id="fl-import-open">Import YAML</button>
+    </div>
+    <div id="fl-import" class="stack" hidden>
+      <label>YAML to import (replaces the rules) <textarea id="fl-yaml" rows="8" class="mono" spellcheck="false"></textarea></label>
+      <button type="button" class="btn small" id="fl-import-go">Import</button>
+    </div>
+    <p class="status small" role="status" id="fl-status"></p>
+  </section>
+
+  <section class="panel fl-edit" aria-labelledby="h-edit" id="fl-edit"></section>
+</div>
+
+<section class="panel flush" aria-labelledby="h-prev">
+  <div class="row between baseline fl-head"><h2 class="h3" id="h-prev">Where items would go</h2><span class="small muted">Sample items and the Inbox, with the rules as they are now</span></div>
+  <ul class="netres fl-prev" id="fl-preview"></ul>
+</section>
+
+<section class="panel" aria-labelledby="h-pol">
+  <h2 class="h3" id="h-pol">For every rule</h2>
+  <div class="grid3" id="fl-policies"></div>
+</section>
+<script src="/static/filing.js?v={{ version }}" defer></script>
+{% endblock %}

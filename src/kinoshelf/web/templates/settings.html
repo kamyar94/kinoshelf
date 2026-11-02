@@ -40,6 +40,14 @@
   <p class="status small" role="status"></p>
 </form>
 
+<section class="panel" aria-labelledby="h-filing">
+  <div class="row between baseline wrap-gap">
+    <h2 class="h3" id="h-filing">Filing rules</h2>
+    <a class="btn small" href="/settings/filing">Open the filing rules</a>
+  </div>
+  <p class="soft small measure">{% if s.filing.enabled and s.filing.rules %}On: {{ s.filing.rules|length }} rule{{ 's' if s.filing.rules|length != 1 }} decide where each film and episode goes; the naming templates below are not used.{% else %}Off: the two naming templates below decide every destination. Rules can sort by genre, language, collection, quality and more.{% endif %}</p>
+</section>
+
 <form class="panel" data-section="naming" aria-labelledby="h-naming">
   <h2 class="h3" id="h-naming">Naming</h2>
   <label>Films <input name="movie" value="{{ s.naming.movie }}" class="mono"></label>

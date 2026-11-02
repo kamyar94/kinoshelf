@@ -26,9 +26,9 @@ from .models import Candidate, LookupError_
 from .mover import DAYS, Mover, next_due, undo
 from .naming import TOKENS, TemplateError, fields_for, render
 from .net import DEFAULT_USE, SOURCE_NAMES, SOURCES, check_address, parse_proxy_url
-from .paths import PathError, PathMap
+from .paths import PathError, PathMap, pure
 from .pipeline import Engine
-from . import updater
+from . import filing, updater
 from .worker import Worker
 
 log = logging.getLogger(__name__)
@@ -330,6 +330,62 @@ def create_app(core: App | None = None) -> FastAPI:
             out["set"] = _net_view(core.settings.values)["set"]  # which secrets are saved, never what
         return out
 
+    # ------------------------------------------------------------ filing rules
+    @app.get("/settings/filing", response_class=HTMLResponse)
+    def filing_page(request: Request):
+        return page(request, "filing.html", cfg=core.settings.get("filing", {}) or {},
+                    policies=filing.POLICIES, preview=_filing_preview(core, core.settings.get("filing", {}) or {}))
+
+    @app.get("/api/filing")
+    def filing_get():
+        return {"filing": core.settings.get("filing", {}) or {}, "policies": filing.POLICIES}
+
+    @app.post("/api/filing")
+    async def filing_save(request: Request):
+        try:
+            cfg = _filing_clean((await request.json()).get("filing"))
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        core.settings.set_section("filing", cfg)
+        return {"ok": True, "preview": _filing_preview(core, cfg)}
+
+    @app.post("/api/filing/preview")
+    async def filing_try(request: Request):
+        try:
+            cfg = _filing_clean((await request.json()).get("filing"))
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        return {"preview": _filing_preview(core, cfg)}
+
+    @app.get("/api/filing/export")
+    def filing_export():
+        text = yaml.safe_dump({"filing": core.settings.get("filing", {}) or {}}, allow_unicode=True, sort_keys=False)
+        return Response(text, media_type="application/x-yaml; charset=utf-8",
+                        headers={"Content-Disposition": 'attachment; filename="kinoshelf-filing-rules.yml"'})
+
+    @app.post("/api/filing/import")
+    async def filing_import(request: Request):
+        try:
+            data = yaml.safe_load(str((await request.json()).get("yaml") or "")) or {}
+            cfg = _filing_clean(data.get("filing", data) if isinstance(data, dict) else None)
+        except (ValueError, yaml.YAMLError) as e:
+            return JSONResponse({"error": f"Not imported: {e}"}, status_code=400)
+        core.settings.set_section("filing", cfg)
+        return {"ok": True, "filing": cfg, "preview": _filing_preview(core, cfg)}
+
+    @app.post("/api/filing/preset")
+    async def filing_preset(request: Request):
+        body = await request.json()
+        movie = pure(str(core.settings.get("naming.movie", "") or "X:\\Movies\\x"))
+        series = pure(str(core.settings.get("naming.episode", "") or "X:\\Series\\x"))
+        try:
+            cfg = filing.preset(str(body.get("name")), str(type(movie)(*movie.parts[:2])), str(type(series)(*series.parts[:2])),
+                                str(body.get("language") or "").strip().lower())
+        except filing.FilingError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        cfg["enabled"] = bool((core.settings.get("filing", {}) or {}).get("enabled"))
+        return {"filing": cfg, "preview": _filing_preview(core, cfg)}
+
     @app.post("/api/update/{action}")
     def update_request(action: str):
         try:
@@ -521,6 +577,61 @@ def _rules(core: App) -> list[tuple[str, str, bool]]:
                                       f"{r.get('max_runtime_diff_pct')}%, {r.get('min_margin')} points ahead", False),
         ("Subtitles", ", ".join(s.get("subtitles.languages", [])) or "none", False),
     ]
+
+
+FILING_SAMPLES = [  # public titles with made-up release names, for the rules preview
+    ({"src_rel": "Inbox/Spirited.Away.2001.1080p.BluRay.mkv", "probe": {"width": 1920, "height": 1040}},
+     {"kind": "movie", "title": "Spirited Away", "original_title": "千と千尋の神隠し", "year": 2001,
+      "facts": {"source": "TMDB", "genres": ["Animation", "Family"], "language": "ja", "countries": ["JP"],
+                "translations": {"ja": "千と千尋の神隠し"}}}),
+    ({"src_rel": "Inbox/Seven.Samurai.1954.720p.mkv", "probe": {"width": 1280, "height": 720}},
+     {"kind": "movie", "title": "Seven Samurai", "original_title": "七人の侍", "year": 1954,
+      "facts": {"source": "TMDB", "genres": ["Drama", "Action"], "language": "ja", "countries": ["JP"],
+                "translations": {"ja": "七人の侍"}}}),
+    ({"src_rel": "Inbox/March.of.the.Penguins.2005.DVDRip.avi", "probe": {"width": 720, "height": 576}},
+     {"kind": "movie", "title": "March of the Penguins", "original_title": "La Marche de l'empereur", "year": 2005,
+      "facts": {"source": "TMDB", "genres": ["Documentary"], "language": "fr", "countries": ["FR"]}}),
+    ({"src_rel": "Inbox/Interstellar.2014.2160p.UHD.mkv", "probe": {"width": 3840, "height": 1600}},
+     {"kind": "movie", "title": "Interstellar", "year": 2014,
+      "facts": {"source": "TMDB", "genres": ["Science Fiction", "Drama"], "language": "en", "countries": ["US"],
+                "collection": {}}}),
+    ({"src_rel": "Inbox/the.office.us.s02e01.mkv", "parsed": {"season": 2, "episodes": [1]}, "probe": {}},
+     {"kind": "series", "title": "The Office", "year": 2005, "episode_title": "The Dundies",
+      "facts": {"source": "TMDB", "genres": ["Comedy"], "language": "en", "countries": ["US"]}}),
+]
+
+
+def _filing_clean(cfg) -> dict:
+    """A rules set as the page sends it, checked; ValueError with every problem."""
+    if not isinstance(cfg, dict) or not isinstance(cfg.get("rules", []), list):
+        raise ValueError("Filing rules are a list of rules")
+    out = {"enabled": bool(cfg.get("enabled")), "rules": cfg.get("rules") or [],
+           "policies": cfg.get("policies") or {}}
+    problems = filing.validate(out)
+    if problems:
+        raise ValueError("; ".join(problems[:5]))
+    return out
+
+
+def _filing_preview(core: App, cfg: dict) -> list[dict]:
+    """Where the sample items and the items now in the Inbox would go with these rules."""
+    if not (cfg or {}).get("rules"):
+        return []
+    rules = filing.Rules(cfg, core.engine.pm())
+    rows = []
+    inbox = [(it, (it.get("candidates") or [None])[0]) for it in core.db.items(["review", "kept", "working", "ready"])][:8]
+    for src, (it, cand) in [("sample", x) for x in FILING_SAMPLES] + [("inbox", x) for x in inbox if x[1]]:
+        label = (cand.get("title") or "") + (f" ({cand['year']})" if cand.get("year") and cand.get("kind") != "series"
+                                               else "")
+        if cand.get("kind") == "series":
+            p = it.get("parsed") or {}
+            label += f" S{int(p.get('season') or 0):02d}E{int((p.get('episodes') or [0])[0]):02d}"
+        try:
+            f = rules.resolve(it, cand)
+            rows.append({"item": label, "from": src, "rule": f.rule, "dest": f.dest, "hold": f.hold, "ok": True})
+        except (filing.FilingError, PathError) as e:
+            rows.append({"item": label, "from": src, "rule": "", "dest": str(e), "hold": "", "ok": False})
+    return rows
 
 
 SOURCE_HINTS = {"tmdb": "titles and posters", "imdb": "the offline list download", "tvmaze": "series and posters",
