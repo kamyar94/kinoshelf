@@ -8,8 +8,9 @@
 #      then asks the new image whether it can carry out the current settings, and refuses it when not;
 #   3. keeps the running image as <image>:previous and a copy of data/config.yml, switches the tag, and
 #      restarts the services with docker compose (no build, no pull);
-#   4. waits until the app answers /api/health with the new version; if it does not in time, puts the previous
-#      image and settings back, restarts, and remembers the bad image so it is never fetched again;
+#   4. waits until the app answers /api/health with the new version and (when the updater ran before) the updater
+#      writes its heartbeat again; if not in time, puts the previous image and settings back, restarts, and
+#      remembers the bad image so it is never fetched again;
 #   5. writes one line per update to data/update/journal.jsonl.
 #
 # Settings (environment): KS_DIR (the folder with docker-compose.yml; default: two levels above this script),
@@ -102,9 +103,23 @@ answers() {  # wait until the app reports version $1 and revision $2 (either may
   return 1
 }
 
+heartbeat() { sed -n 's/.*"heartbeat": *\([0-9]*\).*/\1/p' "$U/agent.json" 2>/dev/null | head -1; }
+updater_runs() {  # the updater, when it ran before this update, writes its heartbeat again from the new image
+  case " $SERVICES " in *" updater "*) ;; *) return 0 ;; esac
+  [ "$HAD_UPDATER" = 1 ] || return 0
+  t=0
+  while [ "$t" -lt "$WAIT" ]; do
+    hb=$(heartbeat); [ "${hb:-0}" -ge "$START" ] && return 0
+    sleep "$STEP"; t=$((t + STEP))
+  done
+  return 1
+}
+
+HAD_UPDATER=0; [ -n "$(heartbeat)" ] && HAD_UPDATER=1
 START=$(date +%s)
 $DOCKER compose up -d --no-build $SERVICES >/dev/null 2>&1 || true
-if answers "$VERSION" "$REVISION"; then
+WHY="no answer with version $VERSION within $WAIT s"
+if answers "$VERSION" "$REVISION" && { updater_runs || { WHY="the app answers, but the updater did not start within $WAIT s"; false; }; }; then
   SECS=$(( $(date +%s) - START ))
   entry updated "healthy after $SECS s" "$SECS"
   printf '{"seen": "%s", "image": "%s", "current": {"version": "%s", "revision": "%s", "digest": "%s"}}\n' \
@@ -130,7 +145,7 @@ if [ -n "$CUR" ]; then
 else
   BACK="there was no previous image to go back to"
 fi
-entry rolled_back "no answer with version $VERSION within $WAIT s; $BACK" "$SECS"
+entry rolled_back "$WHY; $BACK" "$SECS"
 done_with
 $DOCKER image rm "$CAND" >/dev/null 2>&1 || true
 echo "Rolled back: $BACK."

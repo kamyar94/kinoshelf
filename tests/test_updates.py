@@ -242,6 +242,31 @@ def test_agent_reports_an_unreachable_registry(agent_env):
     assert "zq7" not in json.dumps(st)  # the pull token never lands in a file
 
 
+def test_a_failed_check_is_tried_again_sooner_with_a_back_off(agent_env):
+    from kinoshelf.updater import retry_wait, view
+
+    agent, s, fr, clock, d = agent_env
+    assert [retry_wait(CFG, n) / 60 for n in range(5)] == [360, 12, 24, 48, 96]
+    assert retry_wait(CFG, 9) == 6 * 3600  # never longer than the interval
+    good = dict(fr.manifests)
+    fr.manifests.clear()
+    t0 = clock[0]
+    st = agent.run_once()
+    assert st["failures"] == 1 and st["last_check"]["retry_at"] == t0 + 12 * 60
+    clock[0] = t0 + 11 * 60
+    assert agent.run_once()["last_check"]["at"] == t0  # not yet: 12 minutes after a failure
+    clock[0] = t0 + 12 * 60
+    st = agent.run_once()
+    assert st["last_check"]["at"] == clock[0] and st["failures"] == 2  # tried again, failed again: 24 min next
+    assert "Trying again in 24 min" in view(d.parent, s, now=clock[0])["text"]
+    fr.manifests.update(good)
+    clock[0] += 24 * 60
+    st = agent.run_once()
+    assert st["last_check"]["ok"] and st["failures"] == 0
+    clock[0] += 60 * 60
+    assert agent.run_once()["last_check"]["at"] == clock[0] - 60 * 60  # back to the 6-hour interval
+
+
 def test_cosign_mode_needs_a_good_signature(agent_env):
     agent, s, fr, clock, d = agent_env
     s.values["update"]["verify"] = "cosign"
@@ -378,6 +403,19 @@ def test_host_step_rolls_back_a_version_that_does_not_answer(host):
     assert (host["dir"] / "rejected.txt").read_text().strip() == "sha256:" + "9" * 64
     assert not (host["state"] / "tag_kinoshelf_candidate").exists()
     assert bad != host["old"]
+
+
+def test_host_step_needs_the_updater_to_run_again(host):
+    agent = host["dir"] / "agent.json"
+    agent.write_text(json.dumps({"heartbeat": 1000.5, "state": "ready"}, indent=1), encoding="utf-8")
+    host["offer"]("0.1.4")
+    r = host["run"]()  # the app answers, but the updater never writes its heartbeat again
+    assert r.returncode == 1 and host["running"]() == host["old"]
+    assert "the updater did not start" in host["entries"]()[-1]["reason"]
+    agent.write_text(json.dumps({"heartbeat": 9_999_999_999.5}, indent=1), encoding="utf-8")  # it runs
+    host["offer"]("0.1.5")
+    r = host["run"]()
+    assert r.returncode == 0 and host["entries"]()[-1]["event"] == "updated", r.stdout + r.stderr
 
 
 def test_host_step_refuses_a_version_that_cannot_use_the_settings(host):

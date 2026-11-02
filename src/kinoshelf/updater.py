@@ -98,11 +98,22 @@ def compare_versions(a: str, b: str) -> int:
     return (ka > kb) - (ka < kb)
 
 
-def due(cfg: dict, last_check_at: float, now: float, requested: str | None) -> bool:
+RETRY_FIRST_SECONDS = 12 * 60  # a check that failed is tried again after 12 min, then 24, 48 ... up to the interval
+
+
+def retry_wait(cfg: dict, failures: int) -> float:
+    """Seconds until the next check: the interval, or after failed checks a back-off that starts at 12 minutes,
+    doubles each time and never waits longer than the interval."""
+    interval = float(cfg.get("interval_hours", 6) or 6) * 3600
+    if failures <= 0:
+        return interval
+    return min(interval, RETRY_FIRST_SECONDS * 2 ** min(failures - 1, 16))
+
+
+def due(cfg: dict, last_check_at: float, now: float, requested: str | None, failures: int = 0) -> bool:
     if requested or not last_check_at:
         return True
-    hours = float(cfg.get("interval_hours", 6) or 6)
-    return now - float(last_check_at or 0) >= hours * 3600
+    return now - float(last_check_at or 0) >= retry_wait(cfg, failures)
 
 
 def choose(cfg: dict, current: dict, latest: dict | None, bad: set[str], ready: dict,
@@ -182,7 +193,9 @@ class Agent:
         req_file.unlink(missing_ok=True)
         current = current_image(d)
         st.update(heartbeat=now, current=current, enabled=bool(cfg.get("enabled", True)))
-        if not due(cfg, (st.get("last_check") or {}).get("at", 0), now, requested):
+        last = st.get("last_check") or {}
+        failures = int(st.get("failures") or 0) if last and not last.get("ok") else 0
+        if not due(cfg, last.get("at", 0), now, requested, failures):
             write_json(d / "agent.json", st)
             return st
         net = None
@@ -191,7 +204,7 @@ class Agent:
             img: Image = reg.resolve(CHANNEL_TAGS.get(cfg.get("channel"), "latest"))
             latest = {"version": img.version, "revision": img.revision, "digest": img.digest,
                       "manifest_digest": img.manifest_digest, "created": img.created, "size": img.size}
-            st.update(latest=latest, last_check={"at": now, "ok": True, "route": route, "reason": ""})
+            st.update(latest=latest, last_check={"at": now, "ok": True, "route": route, "reason": ""}, failures=0)
             go, why = choose(cfg, current, latest, rejected(d), read_json(d / "ready.json"), requested)
             if go and cfg.get("verify") == "cosign":
                 env = dict(os.environ)
@@ -209,11 +222,13 @@ class Agent:
             else:
                 st.update(state="idle", message=why)
         except RegistryError as e:
-            st.update(state="idle", message=str(e), last_check={"at": now, "ok": False, "reason": str(e),
-                                                                 "route": (st.get("last_check") or {}).get("route", "")})
+            st.update(state="idle", message=str(e), failures=failures + 1,
+                      last_check={"at": now, "ok": False, "reason": str(e), "retry_at": now + retry_wait(cfg, failures + 1),
+                                  "route": (st.get("last_check") or {}).get("route", "")})
         except OSError as e:
-            st.update(state="idle", message=f"Could not write the update ({type(e).__name__})",
-                      last_check={"at": now, "ok": False, "reason": "Could not write the update"})
+            st.update(state="idle", message=f"Could not write the update ({type(e).__name__})", failures=failures + 1,
+                      last_check={"at": now, "ok": False, "reason": "Could not write the update",
+                                  "retry_at": now + retry_wait(cfg, failures + 1)})
         finally:
             if net is not None:
                 net.close()
@@ -309,7 +324,9 @@ def view(data_dir: Path, settings, now: float | None = None) -> dict:
         state = ("Update ready" if agent.get("state") == "ready" else "Fetching an update", True,
                  agent.get("message") or "")
     elif check and not check.get("ok"):
-        state = ("The last check failed", False, check.get("reason") or "")
+        retry = float(check.get("retry_at") or 0)
+        again = (f" Trying again in {max(1, int((retry - now) // 60))} min." if retry > now else " Trying again soon.")
+        state = ("The last check failed", False, (check.get("reason") or "The registry could not be reached.") + again)
     elif not check:
         state = ("Checking soon", True, "The updater has not checked yet.")
     elif not cfg.get("enabled", True):

@@ -79,6 +79,13 @@ The requests are: TMDB `/3/configuration`, the IMDb `title.basics.tsv.gz` header
    refuses to start without `route/config.json` and makes the file readable by you only.
 3. In Settings > Network pick **Route sidecar** and press **Test connections**.
 
+The example's inbound listens on all of the sidecar's addresses (`0.0.0.0`), and that matters: the app and the
+updater reach the sidecar over Docker networks, and the sidecar publishes no port, so nothing outside
+Docker can use it. If you write your own config and restrict the inbound to one address, the containers on other
+networks (the updater, for example) cannot reach it; either listen on all addresses and allow or refuse by source
+address in the routing rules, or give each of them an inbound of its own. The same holds for a proxy container of
+your own that the updater should use (see [UPDATES.md](UPDATES.md)).
+
 The sidecar uses the official image `ghcr.io/xtls/xray-core`, pinned by `XRAY_VERSION` in `.env`
 (26.9.30 when this was written). It runs as your user with a read-only root filesystem and no Linux
 capabilities, publishes no port, and shares only an internal network with the app. The app image

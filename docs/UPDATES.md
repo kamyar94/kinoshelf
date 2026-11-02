@@ -27,7 +27,9 @@ every part against its digest while it downloads: a part that does not match thr
 With `update.verify: cosign` in `data/config.yml` it also checks the signature (this needs the `cosign` program
 for the updater and Sigstore's servers to be reachable). It then leaves a `docker load` archive in
 `data/update/incoming/` and a short note, `data/update/ready.env`. The updater has no Docker access: it cannot
-start, stop or change any container.
+start, stop or change any container. A check that fails (the registry or the proxy cannot be reached) is tried
+again after 12 minutes, then 24, 48 and so on, never later than the regular interval; Settings > Updates says
+when.
 
 **The host step**, `scripts/update/apply.sh`, runs on the computer that runs Docker, from a timer. It:
 
@@ -39,7 +41,9 @@ start, stop or change any container.
    `rejected.txt`, the journal says why, and the running version stays;
 3. keeps the running image as `kinoshelf:previous` and a copy of `data/config.yml`, points `kinoshelf:local`
    at the new image and restarts the services (`docker compose up -d --no-build`; no build, no pull);
-4. waits up to three minutes for the app to answer `/api/health` with the new version;
+4. waits up to three minutes for the app to answer `/api/health` with the new version and, when the updater
+   ran before, for the updater to write its heartbeat again from the new image (an update must not leave the
+   instance unable to fetch the next one);
 5. if it does not, puts the previous image and settings back, restarts, and adds the image's digest to
    `data/update/rejected.txt` so it is never fetched again;
 6. writes one line per update to `data/update/journal.jsonl` (time, from, to, result, seconds, reason).
@@ -75,7 +79,7 @@ plugin, and `sha256sum` (or `shasum`). Nothing happens while no update is waitin
 ```powershell
 $a = New-ScheduledTaskAction -Execute 'wsl.exe' -Argument '-d Ubuntu -u you -- sh /path/to/kinoshelf/scripts/update/apply.sh'
 $t = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 2)
-Register-ScheduledTask -TaskName 'Kinoshelf update step' -Action $a -Trigger $t
+Register-ScheduledTask -TaskName 'Kinoshelf-Update' -Action $a -Trigger $t
 ```
 
 **Docker Desktop on Windows**: the same task with Git for Windows' `sh.exe` (`"C:\Program Files\Git\bin\sh.exe"`
@@ -93,6 +97,12 @@ registry through the proxy or the route sidecar. The hosts it needs are `ghcr.io
 `tuf-repo-cdn.sigstore.dev` and `rekor.sigstore.dev`. If your proxy has an allowlist, allow these for the
 updater container only (give it a fixed address in your compose file). Docker's own settings are not involved:
 the host step never pulls.
+
+The updater must be able to reach the proxy's inbound. A proxy container that listens only on the address of the
+network it shares with the app does not answer the updater on another network: let its inbound listen on all of
+the container's addresses (`0.0.0.0`; with no port published, nothing outside Docker can reach it) and keep
+deciding by source address in its routing rules, or give the updater an inbound of its own. Settings > Updates >
+**Check now** shows "registry reached through the proxy" when the way works.
 
 ## Turning it off, and updating by hand
 
