@@ -42,6 +42,9 @@ def problems(text: str) -> list[str]:
     net = values.get("network") or {}
     if net.get("mode", "direct") not in ("direct", "proxy", "route"):
         out.append(f"The network route {net.get('mode')} is not in this version")
+    from . import filing
+
+    out += filing.validate(values.get("filing") or {})
     upd = values.get("update") or {}
     if upd.get("channel", "latest") not in ("latest", "stable"):
         out.append(f"The update channel {upd.get('channel')} is not in this version")

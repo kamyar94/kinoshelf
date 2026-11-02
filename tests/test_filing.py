@@ -190,3 +190,24 @@ def test_presets_are_neutral_and_work():
     assert by["rules"][0]["when"]["original_language"] == ["ko"] and by["rules"][0]["root"].endswith("Korean")
     f = engine([], by).resolve(*film("Oldboy", 2003, "Inbox/Oldboy.2003.mkv", lang="ko", translations={"ko": "올드보이"}))
     assert isinstance(f, Filing) and f.folder == "X:\\Movies\\Korean\\Oldboy - 올드보이 (2003)"
+
+
+def test_engine_uses_the_rules_when_they_are_on(inst):
+    from conftest import FakeIdentifier
+
+    from kinoshelf.confcheck import problems
+    from kinoshelf.pipeline import Engine
+
+    s = inst["settings"]
+    eng = Engine(s, inst["db"], inst["data"], identifier=FakeIdentifier(s, {}))
+    it, cand = film("Heat", 1995, "Inbox/Heat.1995.1080p.mkv")
+    assert eng.filing_for(it, cand) is None  # off: the naming templates
+    s.values["filing"] = {"enabled": True, "policies": {"quality_from": "name"},
+                          "rules": [{"name": "Films", "when": {"type": "film"}, "root": "X:\Movies",
+                                     "folder": "{Title} ({Year}){ |Tags}", "tags": ["{Quality}"]}]}
+    f = eng.filing_for(it, cand)
+    assert f["dest"] == "X:\Movies\Heat (1995) [1080p]\Heat (1995) [1080p].mkv" and f["rule"] == "Films"
+    assert eng.dest_for(it, cand) == f["dest"]
+    s.values["filing"]["rules"][0]["when"]["mood"] = "calm"
+    import yaml
+    assert "Rule 1: the condition mood is not in this version" in problems(yaml.safe_dump(s.values))

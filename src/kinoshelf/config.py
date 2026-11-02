@@ -120,6 +120,9 @@ DEFAULTS: dict[str, Any] = {
     # enabled: off means nothing in the Inbox is picked up, renamed or moved (the pages still work)
     "watcher": {"enabled": True, "poll_seconds": 30, "settle_seconds": 120},
     "server": {"public_url": "", "lan_url": ""},
+    # Filing rules (docs/FILING.md): an ordered list of rules edited in Settings > Filing rules. Off: the two
+    # naming templates above decide every destination.
+    "filing": {"enabled": False, "rules": [], "policies": {}},
     # Updates (docs/UPDATES.md): the updater container fetches and checks new images; a host step applies them.
     "update": {
         "enabled": True,  # install new versions by themselves; off: only when you press Update now

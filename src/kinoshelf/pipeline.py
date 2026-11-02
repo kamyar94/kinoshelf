@@ -15,7 +15,7 @@ import threading
 import time
 from pathlib import Path, PurePath
 
-from . import media
+from . import filing, media
 from .clean import is_junk_file, parse_name
 from .config import SUBTITLE_EXTS, VIDEO_EXTS
 from .db import Db
@@ -56,6 +56,7 @@ class Engine:
         self.data_dir = data_dir
         self.lock = threading.RLock()
         self._identifier = identifier
+        self._rules: filing.Rules | None = None
         self.net: Net | None = None
         self.reload()
 
@@ -69,6 +70,29 @@ class Engine:
             self.identifier = Identifier(self.settings, self.net, self.data_dir)
         else:
             self.identifier = self._identifier
+
+    def rules(self) -> filing.Rules | None:
+        """The filing rules when Settings > Filing rules is on (the folder index is kept between calls)."""
+        cfg = self.settings.get("filing", {}) or {}
+        if not cfg.get("enabled") or not cfg.get("rules"):
+            return None
+        pm = self.pm()
+        if (self._rules is None or self._rules.cfg != cfg
+                or [vars(e) for e in self._rules.pm.entries] != [vars(e) for e in pm.entries]):
+            self._rules = filing.Rules(cfg, pm)
+        return self._rules
+
+    def filing_for(self, it: dict, cand: dict) -> dict | None:
+        """Where the rules file this candidate (folder, version, tags, collection), or None with the templates."""
+        rules = self.rules()
+        if rules is None:
+            return None
+        try:
+            f = rules.resolve(it, cand)
+        except filing.FilingError as e:
+            raise TemplateError(str(e)) from None
+        self.pm().relative_to_root(f.dest)  # raises PathError when outside the mapped folders
+        return f.to_dict()
 
     def pm(self) -> PathMap:
         return PathMap(self.settings.get("paths.map", []))
@@ -202,7 +226,28 @@ class Engine:
             self.db.update_item(item_id, tries=tries, retry_at=time.time() + wait, notes=[str(e)],
                                 reason="Lookups could not be reached; trying again later")
             return
+        rules = self.rules()
+        if rules is not None and cands:
+            # The rules know the library's folders: a copy of something already there waits for the user.
+            for c in cands[:3]:
+                if c.kind == "series":
+                    c.in_library = None  # a new episode of a show in the library is not "already there"
+                try:
+                    f = rules.resolve(dict(it, parsed=parsed.to_dict(), probe=probe), c.to_dict())
+                except (filing.FilingError, PathError) as e:
+                    if c is cands[0]:
+                        c.checks.append({"key": "filing", "ok": None, "text": str(e)})
+                    continue
+                if f.hold:
+                    c.in_library = c.in_library or f.hold
+                    if not any(ck.get("key") == "library" for ck in c.checks):
+                        c.checks.append({"key": "library", "ok": None, "text": f.hold})
         confident, reason = decide(cands, q, self.settings.get("rule", {}), parsed.kind)
+        if rules is not None and cands and confident:
+            try:
+                rules.resolve(dict(it, parsed=parsed.to_dict(), probe=probe), cands[0].to_dict())
+            except (filing.FilingError, PathError) as e:
+                confident, reason = False, f"Filing rules: {e}"
         if it["is_dvd"]:
             confident, reason = False, "DVD folder: pick the title by hand" if cands else "No name to go on"
         play = {"status": "dvd", "text": "DVD folder"} if it["is_dvd"] else media.playable(
@@ -313,6 +358,9 @@ class Engine:
         return media.frames(self.main_file(it), self.data_dir / "frames" / str(item_id), dur)
 
     def dest_for(self, it: dict, cand: dict) -> str:
+        f = self.filing_for(it, cand)
+        if f is not None:
+            return f["dest"]
         kind = "episode" if cand.get("kind") == "series" else "movie"
         template = self.settings.get(f"naming.{kind}", "")
         main = self.main_file(it)
@@ -331,12 +379,15 @@ class Engine:
         with self.lock:
             it = self.db.item(item_id)
             try:
-                dest = self.dest_for(it, cand)
+                f = self.filing_for(it, cand)
+                dest = f["dest"] if f else self.dest_for(it, cand)
             except (TemplateError, PathError) as e:
                 self.db.update_item(item_id, chosen_cand=cand, reason=f"Naming: {e}")
                 if it["state"] not in ("review", "kept"):
                     self.to_review(item_id)
                 return str(e)
+            if f is not None:
+                cand = dict(cand, filing=f)  # hooks (folder icons, details files) read where and why
             target = self.staged_target(it, dest, WORKING)
             old = Path(it["path"])
             try:
