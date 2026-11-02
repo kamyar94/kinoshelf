@@ -2,7 +2,8 @@
 
   movie.nfo           in a new film folder: title, original title (when it differs), year, release date, running
                       time, plot, genres, up to three countries, IMDb and TMDB ids (IMDb the default), the TMDB
-                      collection as <set>, and the rule's tags (other than a quality word) as <tag>
+                      collection as <set>, and the rule's tags (other than a quality word) as <tag>; with the
+                      option dubbed_tag, that tag too for every copy the rules call dubbed
   tvshow.nfo          in a new show folder: the same without running time and countries, TMDB the default id
   <episode>.nfo       beside each episode: title, show title, season, episode, plot, air date, year, rating, ids
 
@@ -31,7 +32,7 @@ def _year(it: dict, facts: dict):
     return it.get("year") or (facts.get("release_date") or "")[:4] or None
 
 
-def movie_nfo(it: dict) -> str:
+def movie_nfo(it: dict, options: dict | None = None) -> str:
     facts = it.get("facts") or {}
     filing = it.get("filing") or {}
     ids = it.get("ids") or {}
@@ -59,9 +60,12 @@ def movie_nfo(it: dict) -> str:
     coll = facts.get("collection") or {}
     if coll.get("name"):
         L += ["  <set>", f"    <name>{escape(coll['name'])}</name>", "  </set>"]
-    for tag in filing.get("tags") or []:
-        if not re.fullmatch(r"\d+p|DVD|4K", str(tag)):
-            L += _lines("tag", tag)
+    tags = [t for t in filing.get("tags") or [] if not re.fullmatch(r"\d+p|DVD|4K", str(t))]
+    dub = str((options or {}).get("dubbed_tag") or "").strip()
+    if dub and filing.get("dubbed") and dub not in tags:
+        tags.append(dub)
+    for tag in tags:
+        L += _lines("tag", tag)
     L.append("</movie>")
     return "\n".join(L) + "\n"
 
@@ -139,7 +143,7 @@ def handle(job: dict) -> dict:
     target = folder / "movie.nfo"
     if target.exists():
         return {"status": "skipped", "message": "movie.nfo is already there"}
-    made.append(_write(target, movie_nfo(it)))
+    made.append(_write(target, movie_nfo(it, job.get("options") or {})))
     return {"status": "done", "message": "Details file written", "files": made}
 
 

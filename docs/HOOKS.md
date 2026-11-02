@@ -10,7 +10,7 @@ Stages, in this order:
 |---|---|---|
 | `playable` | will the device play it; rewrap or convert if not | `kinoshelf.default_hooks.playable` (reports only, unless `rewrap` / `convert` options are on) |
 | `subtitles` | fetch subtitles in the language order from Settings | `kinoshelf.default_hooks.subtitles` (subliminal; off by default) |
-| `nfo` | write a details file for the media server | `kinoshelf.default_hooks.nfo`; `kinoshelf.default_hooks.library_nfo` (full NFO with the filing rules' tags) |
+| `nfo` | write a details file for the media server | `kinoshelf.default_hooks.nfo`; `kinoshelf.default_hooks.library_nfo` (full NFO with the filing rules' tags; option `dubbed_tag` adds a tag to every copy the rules call dubbed) |
 | `icon` | poster or folder icon | `kinoshelf.default_hooks.poster` (saves `poster.jpg`); `kinoshelf.default_hooks.folder_icon` (Windows folder icon, see [FOLDER-ICONS.md](FOLDER-ICONS.md)) |
 | `after_move` | anything after the file reached the library (runs once, answer ignored) | none |
 

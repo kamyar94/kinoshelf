@@ -39,6 +39,10 @@ def test_movie_nfo_original_title_and_rule_tags():
     text = N.movie_nfo(it)
     assert "  <originaltitle>L'Immortel</originaltitle>\n" in text
     assert text.endswith("  <tag>Dubbed</tag>\n</movie>\n") and "<tag>720p</tag>" not in text
+    assert N.movie_nfo(it, {"dubbed_tag": "Dubbed"}).count("<tag>Dubbed</tag>") == 1  # never twice
+    plain = dict(it, filing={"dubbed": True, "tags": ["720p"]})  # a rule without the dub tag in the folder name
+    assert "<tag>" not in N.movie_nfo(plain) and N.movie_nfo(plain, {"dubbed_tag": "Dubbed"}).endswith(
+        "  <tag>Dubbed</tag>\n</movie>\n")
     ja = N.movie_nfo({"title": "Seven Samurai", "original_title": "七人の侍", "year": 1954, "ids": {"tmdb": "346"}})
     assert "<originaltitle>七人の侍</originaltitle>" in ja
     assert '<uniqueid type="tmdb" default="true">346</uniqueid>' in ja
