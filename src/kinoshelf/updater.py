@@ -299,7 +299,7 @@ def view(data_dir: Path, settings, now: float | None = None) -> dict:
         ev = e.get("event")
         frm, to = e.get("from") or {}, e.get("to") or {}
         hist.append({"when": _when(_iso(str(e.get("at") or ""))),
-                     "result": {"updated": "Updated", "rolled_back": "Rolled back"}.get(ev, "Failed"),
+                     "result": {"updated": "Updated", "rolled_back": "Rolled back", "refused": "Refused"}.get(ev, "Failed"),
                      "ok": ev == "updated", "what": f"{frm.get('version') or '?'} to {_label(to)}",
                      "why": str(e.get("reason") or "")[:200]})
     if not agent or now - float(agent.get("heartbeat") or 0) > AGENT_STALE_SECONDS:

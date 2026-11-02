@@ -5,6 +5,7 @@
 # container: no container gets the Docker socket. Every few minutes it:
 #   1. notes that it ran (data/update/host.json), and stops when no update is waiting (data/update/ready.env);
 #   2. checks the archive's SHA-256, loads it, and checks the loaded image is the one the updater checked;
+#      then asks the new image whether it can carry out the current settings, and refuses it when not;
 #   3. keeps the running image as <image>:previous and a copy of data/config.yml, switches the tag, and
 #      restarts the services with docker compose (no build, no pull);
 #   4. waits until the app answers /api/health with the new version; if it does not in time, puts the previous
@@ -68,6 +69,20 @@ LOADED_LAYERS=$($DOCKER image inspect -f '{{range .RootFS.Layers}}{{println .}}{
 [ "$ID" = "sha256:$CONFIG" ] || [ "$ID" = "$MANIFEST" ] || [ "$ID" = "$DIGEST" ] || \
   { [ -n "$LAYERS" ] && [ "$LOADED_LAYERS" = "$LAYERS" ]; } || {
   $DOCKER image rm "$CAND" >/dev/null 2>&1 || true; fail "the loaded image is not the one the updater checked"; }
+
+# The new version must be able to carry out the current settings (a filing method, hook or rule it lacks would
+# break this instance): it reads them on stdin, with no network and no mounts.
+if [ -f data/config.yml ]; then
+  if ! CHECK=$($DOCKER run --rm -i --network none "$CAND" kinoshelf check-config - < data/config.yml 2>&1); then
+    WHY=$(printf '%s\n' "$CHECK" | grep -v '^Settings ' | head -3 | tr '\n' ';' | tr -cd 'A-Za-z0-9 ._:;,()/-' | cut -c1-240)
+    echo "$DIGEST" >> "$U/rejected.txt"
+    entry refused "the new version cannot use these settings: ${WHY:-it could not read them}"
+    done_with
+    $DOCKER image rm "$CAND" >/dev/null 2>&1 || true
+    echo "Refused: the new version cannot use these settings."
+    exit 1
+  fi
+fi
 
 CUR=$($DOCKER image inspect -f '{{.Id}}' "$IMAGE" 2>/dev/null || true)
 OLDPREV=$($DOCKER image inspect -f '{{.Id}}' "$PREV" 2>/dev/null || true)

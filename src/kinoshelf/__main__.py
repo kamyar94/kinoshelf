@@ -34,6 +34,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("set-password", help="set a new password (and create the account if none exists)")
     p.add_argument("username")
     sub.add_parser("imdb-update", help="download and index the IMDb datasets now")
+    c = sub.add_parser("check-config", help="can this version carry out these settings? (exit 1 when not)")
+    c.add_argument("path", nargs="?", default="-", help="a config.yml, or - for standard input")
     a = sub.add_parser("update-agent", help="check for and fetch new images (runs in the updater container)")
     a.add_argument("--once", action="store_true", help="check once and stop")
     args = ap.parse_args(argv)
@@ -51,6 +53,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "backup":
         print(backup(Path(args.to) if args.to else None))
         return 0
+    if args.cmd == "check-config":
+        from .confcheck import problems
+
+        text = sys.stdin.read() if args.path == "-" else Path(args.path).read_text(encoding="utf-8")
+        found = problems(text)
+        for p in found:
+            print(p)
+        print("Settings this version cannot use" if found else "Settings OK")
+        return 1 if found else 0
     if args.cmd == "update-agent":
         from .config import Settings
         from .updater import Agent

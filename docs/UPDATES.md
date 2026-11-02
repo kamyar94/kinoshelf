@@ -33,6 +33,10 @@ start, stop or change any container.
 
 1. notes that it ran (`data/update/host.json`; the page shows "Host step: seen 3 min ago");
 2. checks the archive's SHA-256, loads it, and checks that the loaded image is the one the updater checked;
+   then runs the new image once, with no network and no mounts, as `kinoshelf check-config -` with
+   `data/config.yml` on its input. When the new version cannot carry out your settings (a filing method, a
+   hook or a rule kind it does not have, a section it does not know), it is refused: its digest goes to
+   `rejected.txt`, the journal says why, and the running version stays;
 3. keeps the running image as `kinoshelf:previous` and a copy of `data/config.yml`, points `kinoshelf:local`
    at the new image and restarts the services (`docker compose up -d --no-build`; no build, no pull);
 4. waits up to three minutes for the app to answer `/api/health` with the new version;

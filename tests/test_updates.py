@@ -275,6 +275,10 @@ case "$cmd" in
     exit 0 ;;
   tag) cp "$S/tag_$(key "$1")" "$S/tag_$(key "$2")"; exit 0 ;;
   compose) cp "$S/tag_$(key kinoshelf:local)" "$S/running"; exit 0 ;;
+  run) id=$(cat "$S/tag_$(key kinoshelf:candidate)"); cat > /dev/null
+       if [ -f "$S/badconfig_$(key "$id")" ]; then echo "The filing method some-other-method is not in this version"
+         echo "Settings this version cannot use"; exit 1; fi
+       echo "Settings OK"; exit 0 ;;
   exec) id=$(cat "$S/running"); [ -f "$S/bad_$(key "$id")" ] && exit 1
         printf '%s|%s\n' "$(cat "$S/version_$(key "$id")")" "$(cat "$S/revision_$(key "$id")" 2>/dev/null)"; exit 0 ;;
 esac
@@ -316,9 +320,11 @@ def host(tmp_path):
     (state / f"tag_{key('kinoshelf:local')}").write_text(old, encoding="utf-8")
     (state / "running").write_text(old, encoding="utf-8")
 
-    def offer(version, bad=False):
+    def offer(version, bad=False, badconfig=False):
         cfg = hashlib.sha256(version.encode()).hexdigest()
         image("sha256:" + cfg, version, bad, revision=f"r{version}")
+        if badconfig:
+            (state / f"badconfig_sha256_{cfg}").write_text("x")
         f = d / f"kinoshelf-{version}.tar"
         f.write_bytes(b"archive " + version.encode())
         (d / f"kinoshelf-{version}.tar.id").write_text("sha256:" + cfg, encoding="utf-8")
@@ -372,6 +378,31 @@ def test_host_step_rolls_back_a_version_that_does_not_answer(host):
     assert (host["dir"] / "rejected.txt").read_text().strip() == "sha256:" + "9" * 64
     assert not (host["state"] / "tag_kinoshelf_candidate").exists()
     assert bad != host["old"]
+
+
+def test_host_step_refuses_a_version_that_cannot_use_the_settings(host):
+    host["offer"]("0.3.0", badconfig=True)
+    r = host["run"]()
+    assert r.returncode == 1 and "Refused" in r.stdout
+    assert host["running"]() == host["old"]  # nothing was switched or restarted
+    e = host["entries"]()[-1]
+    assert e["event"] == "refused" and "some-other-method is not in this version" in e["reason"]
+    assert (host["dir"] / "rejected.txt").read_text().strip() == "sha256:" + "9" * 64
+    assert "compose" not in (host["state"] / "calls.log").read_text()
+
+
+def test_check_config_names_what_a_version_lacks():
+    from kinoshelf.confcheck import problems
+
+    assert problems("watcher: {enabled: false}\n") == []
+    assert problems("network: {proxy: 'http://ks.example.invalid:3128'}\n") == []  # old settings still read
+    found = problems("naming: {preset: some-other-method}\nfuture: {x: 1}\nhooks:\n  icon:\n"
+                     "  - {name: Icon, kind: command, enabled: true, command: [python, -m, kinoshelf.default_hooks.nope]}\n")
+    assert "The filing method some-other-method is not in this version" in found
+    assert "Unknown settings section future" in found
+    assert any("kinoshelf.default_hooks.nope is not in this version" in p for p in found)
+    assert problems("hooks: {icon: [{name: x, kind: telepathy}]}\n") == [
+        "Hook x: the kind telepathy is not in this version"]
 
 
 def test_host_step_refuses_a_damaged_archive(host):
