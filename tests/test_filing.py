@@ -203,11 +203,29 @@ def test_engine_uses_the_rules_when_they_are_on(inst):
     it, cand = film("Heat", 1995, "Inbox/Heat.1995.1080p.mkv")
     assert eng.filing_for(it, cand) is None  # off: the naming templates
     s.values["filing"] = {"enabled": True, "policies": {"quality_from": "name"},
-                          "rules": [{"name": "Films", "when": {"type": "film"}, "root": "X:\Movies",
+                          "rules": [{"name": "Films", "when": {"type": "film"}, "root": r"X:\Movies",
                                      "folder": "{Title} ({Year}){ |Tags}", "tags": ["{Quality}"]}]}
     f = eng.filing_for(it, cand)
-    assert f["dest"] == "X:\Movies\Heat (1995) [1080p]\Heat (1995) [1080p].mkv" and f["rule"] == "Films"
+    assert f["dest"] == r"X:\Movies\Heat (1995) [1080p]\Heat (1995) [1080p].mkv" and f["rule"] == "Films"
     assert eng.dest_for(it, cand) == f["dest"]
     s.values["filing"]["rules"][0]["when"]["mood"] = "calm"
     import yaml
     assert "Rule 1: the condition mood is not in this version" in problems(yaml.safe_dump(s.values))
+
+
+def test_sidecars_are_named_by_language(tmp_path):
+    from kinoshelf.sidecars import artwork_name, sidecar_name, subtitle_language
+
+    taken: set[str] = set()
+    (tmp_path / "Heat.1995.en.srt").write_text("x")
+    assert sidecar_name(tmp_path / "Heat.1995.en.srt", "Heat.1995", "Heat (1995)", taken) == ("Heat (1995).en.srt", False)
+    assert sidecar_name(tmp_path / "Heat.1995.English.forced.srt", "Heat.1995", "Heat (1995)", taken) == (
+        "Heat (1995).en.forced.srt", False)
+    assert sidecar_name(tmp_path / "Heat.1995.eng.srt", "Heat.1995", "Heat (1995)", taken)[0] == "Heat (1995).en.alt.srt"
+    assert sidecar_name(tmp_path / "Heat.1995.sup", "Heat.1995", "Heat (1995)", taken) == (
+        r"Other Files\Heat (1995).sup", True)
+    text = "1\n00:00:01,000 --> 00:00:02,000\nJe ne sais pas ce que vous voulez de moi, et ce n'est pas pour vous.\n"
+    assert subtitle_language(text.encode()) == "fr"
+    assert artwork_name(tmp_path / "cover.jpg", (600, 900), set()) == "poster.jpg"
+    assert artwork_name(tmp_path / "fanart.jpg", (1920, 1080), {"backdrop"}) == "backdrop2.jpg"
+    assert artwork_name(tmp_path / "screenshot1.jpg", (1920, 1080), set()) is None

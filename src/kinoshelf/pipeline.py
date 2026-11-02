@@ -15,7 +15,7 @@ import threading
 import time
 from pathlib import Path, PurePath
 
-from . import filing, media
+from . import filing, media, sidecars
 from .clean import is_junk_file, parse_name
 from .config import SUBTITLE_EXTS, VIDEO_EXTS
 from .db import Db
@@ -279,17 +279,23 @@ class Engine:
             if len(videos) == 1:
                 out += [p for p in folder.rglob("*") if p.is_file() and p not in out
                         and p.suffix.lower().lstrip(".") in SUBTITLE_EXTS]
+                if self.rules() is not None and (self.settings.get("filing.policies", {}) or {}).get("artwork", True):
+                    out += [p for p in folder.iterdir() if p.is_file() and p not in out  # pictures that came with it
+                            and p.suffix.lower().lstrip(".") in sidecars.IMAGE_EXTS]
         return out
 
     # ---------------------------------------------------------------- staging
     def _area_path(self, it: dict, area: str, rel: str | None = None) -> Path:
         return self._root_of(it) / area / Path((rel or it["src_rel"]).replace("\\", "/"))
 
-    def _move_with_sidecars(self, it: dict, new_main: Path, rename_sidecars: bool) -> tuple[Path, list[str]]:
+    def _move_with_sidecars(self, it: dict, new_main: Path, rename_sidecars: bool,
+                            filed: dict | None = None) -> tuple[Path, list[str]]:
         """Move the main file (or DVD folder) and its sidecars; returns new paths."""
         old_main = Path(it["path"])
         new_main = unique(new_main) if not it.get("is_dvd") else new_main
         move(old_main, new_main)
+        if rename_sidecars and filed is not None:
+            return new_main, self._move_sidecars_named(it, old_main, new_main, filed)
         new_sides = []
         for s in it.get("sidecars") or []:
             sp = Path(s)
@@ -357,6 +363,55 @@ class Engine:
         dur = (it.get("probe") or {}).get("duration_s")
         return media.frames(self.main_file(it), self.data_dir / "frames" / str(item_id), dur)
 
+    def _move_sidecars_named(self, it: dict, old_main: Path, new_main: Path, filed: dict) -> list[str]:
+        """Sidecars named as sidecars.py describes; pictures only for a new film folder."""
+        try:
+            from PIL import Image  # only needed here; without it pictures keep their place
+        except ImportError:
+            Image = None
+
+        folder = new_main if it.get("is_dvd") else new_main.parent
+        taken = {p.name.lower() for p in folder.iterdir()} if folder.is_dir() else set()
+        other = folder / "Other Files"
+        if other.is_dir():
+            taken |= {("Other Files\\" + p.name).lower() for p in other.iterdir()}
+        have_art = {re.sub(r"\.(jpe?g|png)$", "", n) for n in taken}
+        out: list[str] = []
+        stem = filed.get("stem") or new_main.stem
+        for s in it.get("sidecars") or []:
+            sp = Path(s)
+            if not sp.exists():
+                continue
+            if sp.suffix.lower().lstrip(".") in sidecars.IMAGE_EXTS:
+                if filed.get("kind") != "movie" or not filed.get("folder_new") or it.get("is_dvd"):
+                    continue  # pictures stay in the Inbox for the user
+                try:
+                    with Image.open(sp) as im:
+                        size = im.size
+                except (OSError, AttributeError):
+                    size = None
+                name = sidecars.artwork_name(sp, size, have_art)
+                if not name:
+                    continue
+                have_art.add(name.rsplit(".", 1)[0])
+                target = folder / name
+            else:
+                got = sidecars.sidecar_name(sp, old_main.stem, stem, taken)
+                if got is None:
+                    continue
+                rel, picture = got
+                target = folder / Path(rel.replace("\\", "/"))
+                if picture:
+                    marker = target.parent / ".ignore"
+                    if not marker.exists():
+                        marker.parent.mkdir(parents=True, exist_ok=True)
+                        marker.write_bytes(b"")
+                        out.append(str(marker))
+            target = unique(target)
+            move(sp, target)
+            out.append(str(target))
+        return out
+
     def dest_for(self, it: dict, cand: dict) -> str:
         f = self.filing_for(it, cand)
         if f is not None:
@@ -391,7 +446,7 @@ class Engine:
             target = self.staged_target(it, dest, WORKING)
             old = Path(it["path"])
             try:
-                new_main, sides = self._move_with_sidecars(it, target, rename_sidecars=True)
+                new_main, sides = self._move_with_sidecars(it, target, rename_sidecars=True, filed=f)
             except OSError as e:
                 return f"Could not move the file: {e}"
             self._tidy_after(old, it)
