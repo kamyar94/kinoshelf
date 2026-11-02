@@ -64,6 +64,8 @@ def payload(stage: str, item: dict, pm: PathMap, settings, options: dict) -> dic
             "people": cand.get("people"),
             "probe": item.get("probe") or {},
             "playable": item.get("playable") or {},
+            "facts": cand.get("facts") or {},  # record details (TMDB): genres, countries, collection, plot ...
+            "filing": cand.get("filing") or {},  # where the filing rules put it: folder, folder_new, collection, tags
         },
         "settings": {
             "subtitle_languages": settings.get("subtitles.languages", []),
@@ -108,7 +110,8 @@ def run_command(hook: dict, body: dict, data_dir: Path, extra_env: dict | None =
     if cmd[0] in ("python", "python3"):
         cmd[0] = sys.executable
     env = {k: v for k, v in os.environ.items() if k not in ("KS_PROXY", "KS_PROXY_USE")}
-    env.update(extra_env or {}, KS_DATA_DIR=str(data_dir), KS_HOOK_STAGE=body["stage"])
+    env.update(extra_env or {}, KS_DATA_DIR=str(data_dir), KS_HOOK_STAGE=body["stage"],
+               PYTHONIOENCODING="utf-8")
     try:
         p = subprocess.run(cmd, input=json.dumps(body, ensure_ascii=False), capture_output=True, text=True,
                            encoding="utf-8", timeout=int(hook.get("timeout_minutes", 240)) * 60, env=env)

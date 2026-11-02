@@ -1,4 +1,5 @@
-# Kinoshelf: one image with the web app, the background worker, ffmpeg and the IBM Plex fonts.
+# Kinoshelf: one image with the web app, the background worker, ffmpeg, the IBM Plex fonts and the folder-icon
+# maker (Pillow, ONNX Runtime with telemetry off, the Oswald font and two small detection models).
 ARG PYTHON_IMAGE=python:3.13.11-slim-trixie
 # Static ffmpeg and ffprobe (two files) instead of Debian's ffmpeg package keeps the image small.
 ARG FFMPEG_IMAGE=mwader/static-ffmpeg:8.1.2
@@ -9,6 +10,9 @@ FROM ${PYTHON_IMAGE} AS fonts
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY scripts/fetch-fonts.sh /fetch-fonts.sh
 RUN sh /fetch-fonts.sh /fonts
+# Folder icons: the tab font and the two small detection models (text, faces), checksums pinned in the script
+COPY scripts/fetch-icon-assets.sh /fetch-icon-assets.sh
+RUN sh /fetch-icon-assets.sh /icon-assets
 
 FROM ${PYTHON_IMAGE}
 # The commit this image was built from; the updater compares it with the registry's newest image.
@@ -21,7 +25,9 @@ ENV KS_REVISION=${KS_REVISION} \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    KS_DATA_DIR=/data
+    KS_DATA_DIR=/data \
+    KS_ICON_ASSETS=/opt/kinoshelf/icon-assets \
+    ORT_DISABLE_TELEMETRY=1
 RUN apt-get update \
     && apt-get install -y --no-install-recommends tzdata \
     && rm -rf /var/lib/apt/lists/*
@@ -32,6 +38,7 @@ RUN pip install -r /app/requirements.lock
 COPY pyproject.toml README.md LICENSE.md LICENSING.md /app/
 COPY src /app/src
 COPY --from=fonts /fonts/ /app/src/kinoshelf/web/static/fonts/
+COPY --from=fonts /icon-assets/ /opt/kinoshelf/icon-assets/
 RUN pip install --no-deps /app && rm -rf /app/src/kinoshelf/__pycache__ \
     && python -c "import kinoshelf.web" \
     && mkdir -p /data && chown 10001:10001 /data

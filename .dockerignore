@@ -15,3 +15,5 @@ route.example.json
 tests
 src/kinoshelf/web/static/fonts/*.woff2
 src/kinoshelf/web/static/fonts/OFL.txt
+.icon-assets
+dist

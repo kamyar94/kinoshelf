@@ -10,8 +10,8 @@ Stages, in this order:
 |---|---|---|
 | `playable` | will the device play it; rewrap or convert if not | `kinoshelf.default_hooks.playable` (reports only, unless `rewrap` / `convert` options are on) |
 | `subtitles` | fetch subtitles in the language order from Settings | `kinoshelf.default_hooks.subtitles` (subliminal; off by default) |
-| `nfo` | write a details file for the media server | `kinoshelf.default_hooks.nfo` |
-| `icon` | poster or folder icon | `kinoshelf.default_hooks.poster` (saves `poster.jpg`) |
+| `nfo` | write a details file for the media server | `kinoshelf.default_hooks.nfo`; `kinoshelf.default_hooks.library_nfo` (full NFO with the filing rules' tags) |
+| `icon` | poster or folder icon | `kinoshelf.default_hooks.poster` (saves `poster.jpg`); `kinoshelf.default_hooks.folder_icon` (Windows folder icon, see [FOLDER-ICONS.md](FOLDER-ICONS.md)) |
 | `after_move` | anything after the file reached the library (runs once, answer ignored) | none |
 
 Hooks are set in Settings > Hooks (YAML), for example:
@@ -67,7 +67,9 @@ shows as "Still working".
     "poster_url": "https://image.tmdb.org/t/p/w185/....jpg",
     "people": "Asghar Farhadi",
     "probe": {"duration_s": 7392.1, "video_codec": "h264", "width": 720, "height": 400, "audio": [], "subtitles": []},
-    "playable": {"status": "ok", "text": "Plays on TV as it is"}
+    "playable": {"status": "ok", "text": "Plays on TV as it is"},
+    "facts": {"genres": ["Drama"], "countries": ["JP"], "language": "ja", "translations": {"ja": "..."}, "collection": null},
+    "filing": {"folder": "X:\\Movies\\Persian\\...", "folder_new": true, "stem": "...", "tags": ["720p"]}
   },
   "settings": {"subtitle_languages": ["fa", "en"], "subtitle_mark_default": true, "device": {}},
   "options": {}
@@ -90,7 +92,7 @@ the shipped poster hook uses it. http hooks are always reached directly.
 One JSON object (for a command hook: the last line of standard output that is a JSON object):
 
 ```json
-{"status": "done", "message": "Persian and English found", "files": ["/media/.../A Separation (2011).fa.srt"]}
+{"status": "done", "message": "Japanese and English found", "files": ["/media/.../Seven Samurai (1954).ja.srt"]}
 ```
 
 | Field | Meaning |

@@ -14,6 +14,9 @@ backups/
 *.sqlite-*
 *.db
 
+# Icon font and detection models are fetched at build time (scripts/fetch-icon-assets.sh)
+.icon-assets/
+
 # Fonts are fetched at build time (scripts/fetch-fonts.sh), not stored here
 src/kinoshelf/web/static/fonts/*.woff2
 src/kinoshelf/web/static/fonts/OFL.txt
