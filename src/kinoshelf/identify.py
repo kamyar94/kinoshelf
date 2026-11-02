@@ -68,7 +68,7 @@ def merge(group: list[Candidate]) -> Candidate:
 
     out = Candidate(kind=g[0].kind, title=g[0].title)
     for attr in ("year", "original_title", "runtime_min", "poster_url", "people", "season", "episode",
-                 "episode_title", "episode_runtime_min"):
+                 "episode_title", "episode_runtime_min", "facts"):
         setattr(out, attr, first(attr))
     seen = {norm(out.title)}
     for c in g:

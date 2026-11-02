@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import re
 import statistics
 from typing import Any
@@ -146,7 +147,8 @@ class TmdbSource(Source):
             c.sources.append(self.name)
 
     def _fill_movie(self, c: Candidate) -> bool:
-        d = self._get(f"/movie/{c.ids['tmdb']}", append_to_response="alternative_titles,external_ids,credits")
+        d = self._get(f"/movie/{c.ids['tmdb']}",
+                      append_to_response="alternative_titles,external_ids,credits,translations,keywords")
         if d is None:
             return False
         self._basics(c, d, "title", "original_title", "release_date")
@@ -160,10 +162,33 @@ class TmdbSource(Source):
         directors = list(dict.fromkeys(p["name"] for p in crew if p.get("job") == "Director" and p.get("name")))
         if directors:
             c.people = ", ".join(directors[:3])
+        coll = d.get("belongs_to_collection") or {}
+        c.facts = _facts(d, "movie") | ({"collection": self._collection(coll)} if coll.get("id") else {})
         return True
 
+    def _collection(self, coll: dict) -> dict:
+        """The TMDB collection a film belongs to, with how many of its films are already released."""
+        cid = str(coll.get("id"))
+        cache = getattr(self, "_collections", None)
+        if cache is None:
+            cache = self._collections = {}
+        if cid not in cache:
+            info = {"id": cid, "name": coll.get("name") or ""}
+            try:
+                d = self._get(f"/collection/{cid}") or {}
+            except LookupError_:
+                d = {}
+            today = datetime.date.today().isoformat()
+            parts = d.get("parts") or []
+            if parts:
+                info["released"] = sum(1 for p in parts if (p.get("release_date") or "9999") <= today)
+                info["parts"] = len(parts)
+            info["backdrop"] = d.get("backdrop_path") or coll.get("backdrop_path")
+            cache[cid] = info
+        return dict(cache[cid])
+
     def _fill_series(self, c: Candidate) -> bool:
-        d = self._get(f"/tv/{c.ids['tmdb']}", append_to_response="alternative_titles,external_ids")
+        d = self._get(f"/tv/{c.ids['tmdb']}", append_to_response="alternative_titles,external_ids,translations,keywords")
         if d is None:
             return False
         self._basics(c, d, "name", "original_name", "first_air_date")
@@ -179,10 +204,11 @@ class TmdbSource(Source):
         countries = d.get("origin_country") or []
         country = countries[0] if countries else network.get("origin_country")
         c.people = _line(network.get("name"), country) or c.people
+        c.facts = _facts(d, "tv")
         return True
 
     def _fill_episode(self, c: Candidate, season: int, episode: int) -> None:
-        e = self._get(f"/tv/{c.ids['tmdb']}/season/{season}/episode/{episode}")
+        e = self._get(f"/tv/{c.ids['tmdb']}/season/{season}/episode/{episode}", append_to_response="external_ids")
         c.season, c.episode = season, episode
         if e is None:
             c.episode_exists = False
@@ -190,6 +216,11 @@ class TmdbSource(Source):
         c.episode_exists = True
         c.episode_title = e.get("name") or None
         c.episode_runtime_min = _minutes(e.get("runtime"))
+        ext = e.get("external_ids") or {}
+        ep_ids = {k: str(v) for k, v in (("tmdb", e.get("id")), ("imdb", ext.get("imdb_id")),
+                                          ("tvdb", ext.get("tvdb_id"))) if v}
+        c.facts = dict(c.facts or {}, episode={"overview": e.get("overview") or "", "air_date": e.get("air_date") or "",
+                                               "rating": e.get("vote_average"), "ids": ep_ids})
 
     # -- by id ------------------------------------------------------------------------
 
@@ -242,6 +273,45 @@ class TmdbSource(Source):
         c.episode_runtime_min = _minutes(ep.get("runtime"))
         c.episode_exists = True
         return c
+
+
+def _facts(d: dict, kind: str) -> dict:
+    """What filing rules read from a TMDB detail record (films: kind "movie", series: "tv"): genres, keywords,
+    countries, original language, the title in every language TMDB has, and alternative titles by country."""
+    translations: dict[str, str] = {}
+    for t in (d.get("translations") or {}).get("translations") or []:
+        data = t.get("data") or {}
+        title = data.get("title") or data.get("name") or ""
+        lang = t.get("iso_639_1") or ""
+        if lang and title and lang not in translations:
+            translations[lang] = title
+    alt_titles: dict[str, list[str]] = {}
+    alts = (d.get("alternative_titles") or {}).get("titles") or (d.get("alternative_titles") or {}).get("results") or []
+    for a in alts:
+        if a.get("iso_3166_1") and a.get("title"):
+            alt_titles.setdefault(a["iso_3166_1"], []).append(a["title"])
+    kw = d.get("keywords") or {}
+    countries = [c.get("iso_3166_1") for c in d.get("production_countries") or [] if c.get("iso_3166_1")]
+    out = {
+        "source": "TMDB",
+        "genres": [g.get("name") for g in d.get("genres") or [] if g.get("name")],
+        "countries": countries or list(d.get("origin_country") or []),
+        "country_names": [c.get("name") for c in d.get("production_countries") or [] if c.get("name")],
+        "language": d.get("original_language") or "",
+        "translations": translations,
+        "alt_titles": alt_titles,
+        "release_date": d.get("release_date") or d.get("first_air_date") or "",
+        "overview": d.get("overview") or "",
+        "keywords": [k.get("name") for k in (kw.get("keywords") or kw.get("results") or []) if k.get("name")],
+    }
+    if kind == "movie" and d.get("runtime"):
+        out["runtime"] = d["runtime"]
+    ext = d.get("external_ids") or {}
+    if ext.get("tvdb_id"):
+        out["tvdb"] = str(ext["tvdb_id"])
+    if d.get("backdrop_path"):
+        out["backdrop"] = d["backdrop_path"]
+    return out
 
 
 def _poster(item: dict) -> str | None:

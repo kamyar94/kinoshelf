@@ -7,7 +7,8 @@ Conditions (all must hold; a list means "any of"):
   type (film | episode | special), genres, keywords, original_language, countries, audio_languages,
   subtitle_languages, dubbed (a language code, or "any"), collection (true/false), quality (release-name word),
   picture (2160p, 1080p, ...), year {min, max}, runtime {min, max} (minutes), in_library (true/false),
-  name (a regular expression on the release name), any: [blocks], not: {block}.
+  name (a regular expression on the release name), details (true: the lookup's record is known),
+  any: [blocks], not: {block}. A rule with "hold: <reason>" sends what it fits to the review page.
 Templates: {Title} {OriginalTitle} {TranslatedTitle:ja} {TranslatedTitle:ja/JP} {Year} {Quality} {Picture} {Tags}
   {Collection} {Folder} {Series} {Season:00} {Episode:00} {Code} {EpisodeTitle} {Part} {VersionWords};
   {prefix|Token|suffix} shows prefix and suffix only when the token has a value.
@@ -29,8 +30,8 @@ from .paths import PathError, PathMap, pure
 VIDEO_EXTS = {"mkv", "mp4", "m4v", "avi", "mov", "wmv", "mpg", "mpeg", "ts", "m2ts", "webm", "flv", "divx", "ogm",
               "vob", "iso", "dat", "3gp", "rmvb", "asf", "mts"}
 CONDITIONS = {"type", "genres", "keywords", "original_language", "countries", "audio_languages", "subtitle_languages",
-              "dubbed", "collection", "quality", "picture", "year", "runtime", "in_library", "name", "any", "not"}
-RULE_KEYS = {"name", "enabled", "when", "root", "folder", "file", "show_folder", "season_folder", "episode_file",
+              "dubbed", "collection", "quality", "picture", "year", "runtime", "in_library", "name", "details", "any", "not"}
+RULE_KEYS = {"name", "enabled", "when", "hold", "root", "folder", "file", "show_folder", "season_folder", "episode_file",
              "tags", "collections", "policies"}
 POLICIES = {
     "quality_from": "name-or-picture",  # name | picture | name-or-picture
@@ -303,6 +304,9 @@ def holds(when: dict | None, x: Item) -> bool:
         elif k == "in_library":
             if x.in_library != bool(v):
                 return False
+        elif k == "details":
+            if bool(x.facts.get("source") or x.facts.get("genres") or x.facts.get("language")) != bool(v):
+                return False
         elif k == "name":
             if not any(re.search(str(v), n or "", re.I) for n in x.names):
                 return False
@@ -330,7 +334,7 @@ def validate(cfg: dict) -> list[str]:
                 elif k == "not":
                     stack.append(v)
         out += [f"Rule {i}: unknown policy {k}" for k in (r.get("policies") or {}) if k not in POLICIES]
-        if not r.get("root") and r.get("enabled", True):
+        if not r.get("root") and not r.get("hold") and r.get("enabled", True):
             out.append(f"Rule {i}: no root folder")
     out += [f"Unknown policy {k}" for k in (cfg or {}).get("policies") or {} if k not in POLICIES]
     return out
@@ -485,6 +489,8 @@ class Rules:
         else:
             existing = [s] if (s := index.show(ids.get("imdb"), names, cand.get("year"))) else []
         rule, x = self.pick(it, cand, in_library=bool(existing))
+        if rule.get("hold"):
+            raise FilingError(str(rule["hold"]))
         return self.film(rule, x, existing) if kind == "film" else self.episode(rule, x, existing[0] if existing else None)
 
     def _values(self, x: Item, **extra) -> dict:

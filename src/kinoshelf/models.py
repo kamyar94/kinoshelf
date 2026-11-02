@@ -46,6 +46,9 @@ class Candidate:
     episode_exists: bool | None = None
     # Filled by identify and scoring
     hash_match: bool = False
+    # Details filing rules read (TMDB: genres, keywords, countries, original language, collection,
+    # titles by language and country, dates; episode details and ids)
+    facts: dict = field(default_factory=dict)
     in_library: str | None = None  # path in the media server when the title is already there
     score: float = 0.0
     checks: list[dict] = field(default_factory=list)  # {"key", "ok" (True/False/None), "text"}

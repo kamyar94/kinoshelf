@@ -88,6 +88,28 @@ def test_conditions_and_rule_order():
         Rules({"rules": [RULES["rules"][0]]}, PM).resolve(*film("Heat", 1995, "Inbox/Heat.mkv"))
 
 
+def test_a_rule_can_hold_items_without_details():
+    rules = {"rules": [{"name": "Wait", "when": {"type": "film", "not": {"details": True}},
+                        "hold": "No details for this title yet"}, *RULES["rules"]]}
+    it, cand = film("Heat", 1995, "Inbox/Heat.1995.mkv")
+    cand["facts"] = {}
+    with pytest.raises(FilingError, match="No details for this title yet"):
+        engine([], rules).resolve(it, cand)
+    assert engine([], rules).resolve(*film("Heat", 1995, "Inbox/Heat.1995.mkv")).rule == "Films"
+    assert validate(rules) == []
+
+
+def test_tmdb_facts_are_generic():
+    from kinoshelf.sources.tmdb import _facts
+
+    f = _facts({"original_language": "ja", "genres": [{"name": "Drama"}], "production_countries": [{"iso_3166_1": "JP"}],
+                "translations": {"translations": [{"iso_639_1": "ja", "data": {"title": "七人の侍"}},
+                                                  {"iso_639_1": "en", "data": {"title": "Seven Samurai"}}]},
+                "alternative_titles": {"titles": [{"iso_3166_1": "US", "title": "The Magnificent Seven"}]}}, "movie")
+    assert f["translations"] == {"ja": "七人の侍", "en": "Seven Samurai"}
+    assert f["alt_titles"] == {"US": ["The Magnificent Seven"]} and f["countries"] == ["JP"]
+
+
 def test_holds_reads_every_condition():
     it, cand = film("Heat", 1995, "Inbox/Heat.1995.720p.mkv", genres=["Crime"], audio=["en"], minutes=170,
                     coll={"id": "1", "name": "X"})
