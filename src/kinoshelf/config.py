@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import copy
+import logging
 import os
 import threading
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+log = logging.getLogger(__name__)
 
 VIDEO_EXTS = [
     "mkv", "mp4", "m4v", "avi", "mov", "wmv", "mpg", "mpeg", "ts", "m2ts", "webm", "flv", "divx", "ogm", "vob",
@@ -49,7 +52,16 @@ DEFAULTS: dict[str, Any] = {
         "opensubtitles": {"enabled": False, "api_key": "", "user_agent": "Kinoshelf v0.1.0"},
         "jellyfin": {"enabled": False, "url": "", "api_key": "", "path_map": []},
     },
-    "network": {"proxy": "", "timeout_seconds": 15},
+    "network": {
+        "mode": "direct",  # direct | proxy | route (the optional Xray sidecar, compose profile "route")
+        # Secrets: write-only on the page, never logged, never in hook jobs or backups.
+        "proxy": {"kind": "http", "address": "", "username": "", "password": ""},  # kind: http | socks5
+        "route_url": "http://route:10809",  # the sidecar inside Docker; its own config stays on the host
+        # Sources that take the proxy or sidecar. Jellyfin is normally on the home network.
+        "use": {"tmdb": True, "imdb": True, "tvmaze": True, "omdb": True, "opensubtitles": True,
+                "jellyfin": False},
+        "timeout_seconds": 15,
+    },
     "scoring": {
         "weights": {"title": 35, "runtime": 30, "year": 15},
         "missing_year": 0.7,  # year check value when the file name has no year
@@ -136,12 +148,16 @@ class Settings:
         self.load()
 
     def load(self) -> None:
+        changed = False
         with _lock:
             if self.path.exists():
                 raw = yaml.safe_load(self.path.read_text(encoding="utf-8")) or {}
                 self.values = deep_merge(DEFAULTS, raw)
+                changed = migrate(self.values, raw)
             else:
                 self.values = copy.deepcopy(DEFAULTS)
+        if changed:
+            self.save()
 
     def save(self) -> None:
         with _lock:
@@ -172,3 +188,29 @@ class Settings:
     def set_section(self, key: str, value: Any) -> None:
         self.values[key] = value
         self.save()
+
+
+def migrate(values: dict, raw: dict) -> bool:
+    """Bring settings written by an older version up to date. True when something changed.
+
+    0.1.0 kept one proxy URL in network.proxy for every lookup and Jellyfin. It becomes mode "proxy"
+    with the URL split into kind, address, username and password; Jellyfin now goes direct.
+    """
+    net = values.get("network")
+    if not isinstance(net, dict) or not isinstance(net.get("proxy"), str):
+        return False
+    from .net import parse_proxy_url
+
+    old = net["proxy"].strip()
+    net["proxy"] = copy.deepcopy(DEFAULTS["network"]["proxy"])
+    parts = None
+    if old:
+        try:
+            parts = parse_proxy_url(old)
+        except ValueError:
+            log.warning("The old proxy setting could not be read; set it again in Settings > Network")
+    if parts:
+        net["proxy"].update(parts)
+    if "mode" not in ((raw or {}).get("network") or {}):
+        net["mode"] = "proxy" if parts else "direct"
+    return True

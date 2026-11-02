@@ -6,6 +6,8 @@ _drafts
 data
 .env
 cloudflared.env
+route
+route.example.json
 **/__pycache__
 **/*.pyc
 .pytest_cache

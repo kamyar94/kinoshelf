@@ -18,6 +18,13 @@ if (($envVars['COMPOSE_PROFILES'] + '') -match 'tunnel') {
     # Only the current user (and SYSTEM) may read the token file.
     icacls cloudflared.env /inheritance:r /grant:r "$($env:USERNAME):(R,W)" /grant:r 'SYSTEM:(F)' | Out-Null
 }
+if (($envVars['COMPOSE_PROFILES'] + '') -match 'route') {
+    if (-not (Test-Path route\config.json -PathType Leaf)) {
+        throw 'The route sidecar needs route\config.json (copy route.example.json; see docs\NETWORK.md).'
+    }
+    # Only the current user (and SYSTEM) may read the sidecar's server details.
+    icacls route\config.json /inheritance:r /grant:r "$($env:USERNAME):(R,W)" /grant:r 'SYSTEM:(F)' | Out-Null
+}
 docker compose build
 docker compose up -d
 Start-Sleep -Seconds 3

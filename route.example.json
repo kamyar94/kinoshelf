@@ -1,0 +1,33 @@
+{
+  "log": {"loglevel": "none", "access": "none"},
+  "inbounds": [
+    {
+      "tag": "kinoshelf",
+      "listen": "0.0.0.0",
+      "port": 10809,
+      "protocol": "http",
+      "settings": {}
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "server",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "server.example.invalid",
+            "port": 443,
+            "users": [{"id": "REPLACE-WITH-YOUR-ID", "encryption": "none"}]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {"serverName": "server.example.invalid"},
+        "wsSettings": {"path": "/REPLACE-WITH-YOUR-PATH"}
+      }
+    }
+  ]
+}

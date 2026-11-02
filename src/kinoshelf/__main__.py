@@ -72,8 +72,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def backup(dest: Path | None = None) -> str:
-    """Online copy of the database plus settings and journals, as one .tar.gz. Keys are inside:
-    keep backups where only you can read them."""
+    """Online copy of the database plus settings and journals, as one .tar.gz. API keys are inside:
+    keep backups where only you can read them. The proxy's address and sign-in are left out."""
     d = data_dir()
     dest = dest or d / "backups"
     dest.mkdir(parents=True, exist_ok=True)
@@ -88,7 +88,7 @@ def backup(dest: Path | None = None) -> str:
         src.close()
         out.close()
         if (d / "config.yml").exists():
-            shutil.copy2(d / "config.yml", work / "config.yml")
+            copy_settings_without_proxy(d / "config.yml", work / "config.yml")
         if (d / "journal").exists():
             shutil.copytree(d / "journal", work / "journal")
         archive = dest / f"kinoshelf-{stamp}.tar.gz"
@@ -101,6 +101,24 @@ def backup(dest: Path | None = None) -> str:
         return str(archive)
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+def copy_settings_without_proxy(src: Path, dest: Path) -> None:
+    """config.yml with the proxy's address, username and password blanked (set them again after a
+    restore). The route sidecar's server details were never in it."""
+    import yaml
+
+    raw = yaml.safe_load(src.read_text(encoding="utf-8")) or {}
+    net = raw.get("network") if isinstance(raw, dict) else None
+    if isinstance(net, dict):
+        if isinstance(net.get("proxy"), dict):
+            for k in ("address", "username", "password"):
+                if k in net["proxy"]:
+                    net["proxy"][k] = ""
+        elif isinstance(net.get("proxy"), str):
+            net["proxy"] = ""
+    dest.write_text("# Kinoshelf settings from a backup. The proxy's address and sign-in are left out.\n"
+                    + yaml.safe_dump(raw, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import httpx
 
+from ..net import proxy_from_env
 from . import run
 
 
@@ -22,11 +23,11 @@ def handle(job: dict) -> dict:
     names = ("poster.jpg", "folder.jpg", "cover.jpg")
     if any((folder / n).exists() for n in names) or (lib_folder and any((lib_folder / n).exists() for n in names)):
         return {"status": "skipped", "message": "A poster is already there"}
-    proxy = (job.get("settings") or {}).get("proxy") or None
+    proxy = proxy_from_env(url)  # the poster's source takes the route Settings > Network gives it
     out = folder / "poster.jpg"
     # A poster is a nice-to-have: when it cannot be fetched (filtered network), the file goes on without it.
     try:
-        with httpx.Client(proxy=proxy, timeout=20, follow_redirects=True) as c:
+        with httpx.Client(proxy=proxy, trust_env=False, timeout=20, follow_redirects=True) as c:
             r = c.get(url)
     except httpx.HTTPError as e:
         return {"status": "skipped", "message": f"Poster not reachable ({type(e).__name__})"}

@@ -64,7 +64,7 @@ class Engine:
         """Rebuild the network client and sources after the settings change."""
         if self.net is not None:
             self.net.close()
-        self.net = Net(self.settings.get("network.proxy"), float(self.settings.get("network.timeout_seconds", 15)))
+        self.net = Net.from_settings(self.settings)
         if self._identifier is None or not getattr(self._identifier, "fixed", False):
             self.identifier = Identifier(self.settings, self.net, self.data_dir)
         else:

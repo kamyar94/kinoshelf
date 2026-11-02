@@ -16,14 +16,15 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import __version__
+from . import __version__, netcheck
 from .auth import Auth, CloudflareAccess
-from .config import Settings, data_dir
+from .config import DEFAULTS, Settings, data_dir
 from .db import Db
 from .identify import Identifier
 from .models import Candidate, LookupError_
 from .mover import DAYS, Mover, next_due, undo
 from .naming import TOKENS, TemplateError, fields_for, render
+from .net import DEFAULT_USE, SOURCE_NAMES, SOURCES, check_address, parse_proxy_url
 from .paths import PathError, PathMap
 from .pipeline import Engine
 from .worker import Worker
@@ -32,6 +33,7 @@ log = logging.getLogger(__name__)
 HERE = Path(__file__).parent / "web"
 COOKIE = "ks_session"
 POSTER_HOSTS = {"image.tmdb.org", "static.tvmaze.com", "m.media-amazon.com", "ia.media-imdb.com"}
+DEFAULT_PROXY = DEFAULTS["network"]["proxy"]
 SECTIONS = ["paths", "naming", "rule", "schedule", "subtitles", "sources", "network", "device", "hooks", "junk",
             "server", "watcher"]
 
@@ -304,7 +306,7 @@ def create_app(core: App | None = None) -> FastAPI:
         imdb = next((x for x in core.engine.identifier.sources["titles"] if x.key == "imdb"), None)
         return page(request, "settings.html", s=s, keys=_key_state(s), tokens=TOKENS, days=DAYS,
                     hooks_yaml=yaml.safe_dump(s.get("hooks", {}), allow_unicode=True, sort_keys=False),
-                    imdb=_try_status(imdb), preview=_previews(core))
+                    imdb=_try_status(imdb), preview=_previews(core), net=_net_view(s))
 
     @app.post("/api/settings/{section}")
     async def save_section(section: str, request: Request):
@@ -318,7 +320,17 @@ def create_app(core: App | None = None) -> FastAPI:
         core.settings.set_section(section, value)
         if section in ("sources", "network"):
             core.engine.reload()
-        return {"ok": True, "note": note, "preview": _previews(core) if section in ("naming", "paths") else None}
+        out = {"ok": True, "note": note, "preview": _previews(core) if section in ("naming", "paths") else None}
+        if section == "network":
+            out["set"] = _net_view(core.settings.values)["set"]  # which secrets are saved, never what
+        return out
+
+    @app.post("/api/network/test", response_class=HTMLResponse)
+    def network_test(request: Request):
+        results = netcheck.run(core.engine.net, core.settings)
+        return tpl.TemplateResponse(request, "_nettest.html", {
+            "results": results, "at": time.strftime("%H:%M"),
+            "reached": sum(1 for r in results if r.ok), "tested": sum(1 for r in results if r.ok is not None)})
 
     @app.post("/api/test/{source}")
     def test_source(source: str):
@@ -493,6 +505,23 @@ def _rules(core: App) -> list[tuple[str, str, bool]]:
     ]
 
 
+SOURCE_HINTS = {"tmdb": "titles and posters", "imdb": "the offline list download", "tvmaze": "series and posters",
+                "omdb": "second opinion", "opensubtitles": "file hash",
+                "jellyfin": "a local address always goes direct"}
+SECRET_FIELDS = ("address", "username", "password")
+
+
+def _net_view(s: dict) -> dict:
+    """What the Network panel shows. Secrets appear only as set or not set, never as text."""
+    n = s.get("network") or {}
+    p = n.get("proxy") if isinstance(n.get("proxy"), dict) else {}
+    use = dict(DEFAULT_USE, **{k: bool(v) for k, v in (n.get("use") or {}).items() if k in DEFAULT_USE})
+    return {"mode": n.get("mode", "direct"), "kind": p.get("kind", "http"),
+            "set": {f: bool(str(p.get(f) or "").strip()) for f in SECRET_FIELDS},
+            "use": [{"key": k, "name": SOURCE_NAMES[k], "hint": SOURCE_HINTS[k], "on": use[k]} for k in SOURCES],
+            "timeout": n.get("timeout_seconds", 15)}
+
+
 def _key_state(s: dict) -> dict:
     out = {}
     for name, cfg in (s.get("sources") or {}).items():
@@ -615,10 +644,40 @@ def _validate(core: App, section: str, body: dict):
                     cur[name][k] = str(v).strip()
         return cur, note
     if section == "network":
-        proxy = str(body.get("proxy", "")).strip()
-        if proxy and not re.match(r"^(https?|socks5h?)://", proxy):
-            raise ValueError("A proxy looks like http://host:port")
-        cur.update(proxy=proxy, timeout_seconds=_num(body.get("timeout_seconds", 15), 3, 120, "Time limit"))
+        # Error messages here never repeat what was typed: the values are secrets.
+        mode = str(body.get("mode", cur.get("mode", "direct")))
+        if mode not in ("direct", "proxy", "route"):
+            raise ValueError("Pick direct, a proxy or the route sidecar")
+        p = dict(DEFAULT_PROXY, **(cur.get("proxy") if isinstance(cur.get("proxy"), dict) else {}))
+        kind = str(body.get("kind", p.get("kind", "http")))
+        if kind not in ("http", "socks5"):
+            raise ValueError("A proxy is HTTP or SOCKS5")
+        p["kind"] = kind
+        for f in body.get("clear") or []:
+            if f in SECRET_FIELDS:
+                p[f] = ""
+        addr = str(body.get("address") or "").strip()
+        if addr:
+            parts = parse_proxy_url(addr) if "://" in addr else {"address": check_address(addr)}
+            if parts["address"] != p.get("address") and (p.get("username") or p.get("password")):
+                # A sign-in belongs to one server: never send the old one to a new address.
+                p["username"] = p["password"] = ""
+                note = "Saved. The old username and password were forgotten with the old address."
+            p.update({k: v for k, v in parts.items() if v})
+        for f in ("username", "password"):
+            v = str(body.get(f) or "").strip()
+            if v:
+                p[f] = v
+        use = dict(DEFAULT_USE, **{k: bool(v) for k, v in (cur.get("use") or {}).items() if k in DEFAULT_USE})
+        for k, v in (body.get("use") or {}).items():
+            if k in use:
+                use[k] = bool(v)
+        cur.update(mode=mode, proxy=p, use=use,
+                   timeout_seconds=_num(body.get("timeout_seconds", cur.get("timeout_seconds", 15)), 3, 120,
+                                        "Time limit"))
+        cur.setdefault("route_url", "http://route:10809")
+        if mode == "proxy" and not p["address"]:
+            note = "Saved. Lookups go direct until the proxy's address is set."
         return cur, note
     if section == "device":
         cur.update(name=str(body.get("name", "")).strip() or "TV",

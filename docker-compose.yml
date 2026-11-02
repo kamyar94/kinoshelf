@@ -6,10 +6,13 @@
 #   compose.lan.yml     the app on one LAN address of the host
 #   profile "tunnel"    a Cloudflare Tunnel connector; the app then refuses any request that came
 #                       through Cloudflare without a valid Cloudflare Access token
+#   profile "route"     an Xray sidecar for lookups on a filtered network (docs/NETWORK.md); its
+#                       config stays in ./route/config.json on the host, which the app never reads
 # Your media folders are mounted in compose.media.yml (copy compose.media.example.yml).
 #
 #   app     (tunnel + app-out nets)    web app and worker, data in ./data, media mounted read-write
 #   tunnel  (tunnel + tunnel-out nets) Cloudflare Tunnel connector, token only in cloudflared.env
+#   route   (route + route-out nets)   Xray sidecar, server details only in ./route/config.json
 
 name: kinoshelf
 
@@ -47,6 +50,7 @@ services:
     networks:
       - tunnel
       - app-out
+      - route
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8484/api/health',timeout=5)"]
       interval: 60s
@@ -77,6 +81,25 @@ services:
     cpus: 1.0
     pids_limit: 100
 
+  route:
+    <<: *hardening
+    profiles: ["route"]
+    # Official Xray image (distroless). Its config is yours and stays on the host; Settings > Network >
+    # Route sidecar sends the chosen lookups to http://route:10809.
+    image: ghcr.io/xtls/xray-core:${XRAY_VERSION:-26.9.30}
+    container_name: kinoshelf-route
+    user: "${PUID:?set PUID in .env}:${PGID:?set PGID in .env}"
+    read_only: true
+    volumes:
+      - ./route/config.json:/usr/local/etc/xray/config.json:ro
+    networks:
+      - route
+      - route-out
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 1.0
+    pids_limit: 100
+
 networks:
   # tunnel <-> app. No internet.
   tunnel:
@@ -85,3 +108,8 @@ networks:
   tunnel-out: {}
   # Outbound only, for lookups (TMDB, TVmaze, OMDb, OpenSubtitles, IMDb datasets) and Jellyfin.
   app-out: {}
+  # app <-> route sidecar. No internet.
+  route:
+    internal: true
+  # Outbound only, for the route sidecar to reach your server.
+  route-out: {}

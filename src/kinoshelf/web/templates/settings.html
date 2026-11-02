@@ -121,12 +121,74 @@
   <p class="status small" role="status"></p>
 </form>
 
-<form class="panel" data-section="network" aria-labelledby="h-net">
-  <h2 class="h3" id="h-net">Network</h2>
-  <div class="grid3">
-    <label>Proxy for lookups (optional) <input name="proxy" value="{{ s.network.proxy }}" class="mono" placeholder="http://host:port"></label>
-    <label>Time limit per lookup (seconds) <input name="timeout_seconds" type="number" min="3" max="120" value="{{ s.network.timeout_seconds }}"></label>
+<form class="panel net" data-section="network" data-net aria-labelledby="h-net">
+  <div class="stack tight">
+    <h2 class="h3" id="h-net">Network</h2>
+    <p class="soft small measure">How lookups reach the internet. API keys go only to the real source, inside HTTPS: a proxy or the sidecar sees which site is asked, never the key.</p>
   </div>
+
+  <fieldset class="routes">
+    <legend>How lookups reach the internet</legend>
+    {% for key, name, text in [('direct', 'Direct', 'Straight from this computer.'), ('proxy', 'Proxy', 'Through an HTTP or SOCKS5 proxy you run.'), ('route', 'Route sidecar', 'Through the optional Xray container beside Kinoshelf.')] %}
+    <label class="route">
+      <span class="route-name"><input type="radio" name="mode" value="{{ key }}" {% if net.mode == key %}checked{% endif %}>{{ name }}</span>
+      <span class="small soft">{{ text }}</span>
+    </label>
+    {% endfor %}
+  </fieldset>
+
+  <div class="netbox" data-when="proxy" {% if net.mode != 'proxy' %}hidden{% endif %}>
+    <div class="seg" role="radiogroup" aria-label="Proxy kind">
+      <label><input type="radio" name="kind" value="http" {% if net.kind != 'socks5' %}checked{% endif %}>HTTP</label>
+      <label><input type="radio" name="kind" value="socks5" {% if net.kind == 'socks5' %}checked{% endif %}>SOCKS5</label>
+    </div>
+    <div class="secrets">
+      {% for f, label, type, ph in [('address', 'Address', 'text', 'proxy.example.invalid:8080'), ('username', 'Username (optional)', 'text', ''), ('password', 'Password (optional)', 'password', '')] %}
+      <div class="secret" data-secret="{{ f }}" data-set="{{ 'yes' if net.set[f] else 'no' }}">
+        <span class="secret-label" id="lab-{{ f }}">{{ label }}</span>
+        <span class="secret-state" {% if not net.set[f] %}hidden{% endif %}>
+          <span class="pill good">set</span>
+          <button type="button" class="btn small" data-replace aria-describedby="lab-{{ f }}">Replace</button>
+          <button type="button" class="link" data-remove aria-describedby="lab-{{ f }}">Remove</button>
+        </span>
+        <span class="secret-edit" {% if net.set[f] %}hidden{% endif %}>
+          <input name="{{ f }}" type="{{ type }}" class="mono" autocomplete="off" spellcheck="false" data-secret-input aria-labelledby="lab-{{ f }}" placeholder="{{ ph or 'Not set' }}">
+          <button type="button" class="link" data-keep {% if not net.set[f] %}hidden{% endif %}>Keep the saved one</button>
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="small muted">Saved values are never shown again, not even in part. Replace to type a new one.</p>
+  </div>
+
+  <div class="netbox" data-when="route" {% if net.mode != 'route' %}hidden{% endif %}>
+    <p class="small soft measure">The sidecar is a small Xray container beside Kinoshelf. Your server's details stay in one file on this computer; Kinoshelf never reads it and never shows it.</p>
+    <ol class="steps small">
+      <li>Copy <span class="mono">route.example.json</span> to <span class="mono">route/config.json</span> and fill in your server.</li>
+      <li>Add <span class="mono">route</span> to <span class="mono">COMPOSE_PROFILES</span> in .env and start again.</li>
+      <li>Press Test connections below.</li>
+    </ol>
+  </div>
+
+  <fieldset class="uses" {% if net.mode == 'direct' %}disabled{% endif %}>
+    <legend>Sources that use it</legend>
+    {% for u in net.use %}
+    <label class="check"><input type="checkbox" name="use.{{ u.key }}" {% if u.on %}checked{% endif %}><span>{{ u.name }} <span class="muted small">{{ u.hint }}</span></span></label>
+    {% endfor %}
+    <p class="small muted span-all" data-when="direct" {% if net.mode != 'direct' %}hidden{% endif %}>Direct: every source goes straight out.</p>
+  </fieldset>
+
+  <label class="narrowfield">Time limit per lookup (seconds) <input name="timeout_seconds" type="number" min="3" max="120" value="{{ net.timeout }}" class="short"></label>
+
+  <section class="nettest" aria-label="Test connections">
+    <div class="row wrap-gap">
+      <button type="button" class="btn primary" data-nettest>Test connections</button>
+      <span class="small muted">One request to each source, with no API key in it.</span>
+    </div>
+    <div data-results aria-live="polite">
+      <p class="empty-box small">Press Test connections to try each source once through the saved route.</p>
+    </div>
+  </section>
   <p class="status small" role="status"></p>
 </form>
 

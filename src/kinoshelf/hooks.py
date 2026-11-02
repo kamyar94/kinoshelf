@@ -69,7 +69,6 @@ def payload(stage: str, item: dict, pm: PathMap, settings, options: dict) -> dic
             "subtitle_languages": settings.get("subtitles.languages", []),
             "subtitle_mark_default": settings.get("subtitles.mark_default", True),
             "device": settings.get("device", {}),
-            "proxy": settings.get("network.proxy", ""),
         },
         "options": options or {},
     }
@@ -100,13 +99,16 @@ def _norm_answer(ans: dict, fallback: str) -> dict:
     return out
 
 
-def run_command(hook: dict, body: dict, data_dir: Path) -> dict:
+def run_command(hook: dict, body: dict, data_dir: Path, extra_env: dict | None = None) -> dict:
+    """extra_env: KS_PROXY and KS_PROXY_USE when lookups take a proxy (see Net.hook_env). Command
+    hooks run inside the container, so the route reaches them only through their environment."""
     cmd = list(hook.get("command") or [])
     if not cmd:
         return {"status": "failed", "message": "No command set"}
     if cmd[0] in ("python", "python3"):
         cmd[0] = sys.executable
-    env = dict(os.environ, KS_DATA_DIR=str(data_dir), KS_HOOK_STAGE=body["stage"])
+    env = {k: v for k, v in os.environ.items() if k not in ("KS_PROXY", "KS_PROXY_USE")}
+    env.update(extra_env or {}, KS_DATA_DIR=str(data_dir), KS_HOOK_STAGE=body["stage"])
     try:
         p = subprocess.run(cmd, input=json.dumps(body, ensure_ascii=False), capture_output=True, text=True,
                            encoding="utf-8", timeout=int(hook.get("timeout_minutes", 240)) * 60, env=env)
@@ -119,6 +121,7 @@ def run_command(hook: dict, body: dict, data_dir: Path) -> dict:
 
 
 def run_http(hook: dict, body: dict, net: Net) -> dict:
+    """Your own service, normally on the same host or network: reached directly, never by proxy."""
     url = hook.get("url")
     if not url:
         return {"status": "failed", "message": "No URL set"}
@@ -164,7 +167,7 @@ def run_folder(hook: dict, body: dict, pm: PathMap) -> dict:
 def run_hook(hook: dict, body: dict, pm: PathMap, net: Net, data_dir: Path) -> dict:
     kind = hook.get("kind", "command")
     if kind == "command":
-        return run_command(hook, body, data_dir)
+        return run_command(hook, body, data_dir, net.hook_env() if hasattr(net, "hook_env") else None)
     if kind == "http":
         return run_http(hook, body, net)
     if kind == "folder":

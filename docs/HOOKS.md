@@ -69,7 +69,7 @@ shows as "Still working".
     "probe": {"duration_s": 7392.1, "video_codec": "h264", "width": 720, "height": 400, "audio": [], "subtitles": []},
     "playable": {"status": "ok", "text": "Plays on TV as it is"}
   },
-  "settings": {"subtitle_languages": ["fa", "en"], "subtitle_mark_default": true, "device": {}, "proxy": ""},
+  "settings": {"subtitle_languages": ["fa", "en"], "subtitle_mark_default": true, "device": {}},
   "options": {}
 }
 ```
@@ -77,6 +77,13 @@ shows as "Still working".
 `file` and `dest_file` are container paths; `file_shown` and `dest_shown` are the same places as you
 and your media server see them. `options` is the hook's own `options` from Settings. A command hook
 also gets `KS_DATA_DIR` and `KS_HOOK_STAGE` in its environment.
+
+**Network route.** The job never carries the proxy: job files can sit on a shared drive and http
+hooks are other programs. When Settings > Network sends lookups through a proxy or the route
+sidecar, a command hook (and only a command hook) gets `KS_PROXY` (the proxy URL) and `KS_PROXY_USE`
+(the source keys that take it, such as `tmdb,tvmaze`) in its environment.
+`kinoshelf.net.proxy_from_env(url)` returns the proxy for a URL by its source, or `None` for direct;
+the shipped poster hook uses it. http hooks are always reached directly.
 
 ## The answer
 

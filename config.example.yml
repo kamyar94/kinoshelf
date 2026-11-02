@@ -37,7 +37,12 @@ sources:
     api_key: ''
     path_map: []                 # [{from: 'X:\', to: '/media'}] when Jellyfin sees other paths
 
-network: {proxy: '', timeout_seconds: 15}
+network:                         # Settings > Network; see docs/NETWORK.md
+  mode: direct                   # direct | proxy | route (the optional Xray sidecar)
+  proxy: {kind: http, address: '', username: '', password: ''}   # secrets: write-only on the page
+  route_url: 'http://route:10809'
+  use: {tmdb: true, imdb: true, tvmaze: true, omdb: true, opensubtitles: true, jellyfin: false}
+  timeout_seconds: 15
 
 device:                          # what the playback device plays without conversion
   name: TV

@@ -13,6 +13,10 @@ if echo "${COMPOSE_PROFILES:-}" | grep -q tunnel; then
     echo "The tunnel needs Cloudflare Access: set KS_CF_ACCESS_TEAM and KS_CF_ACCESS_AUD in .env."; exit 1; }
   chmod 600 cloudflared.env
 fi
+if echo "${COMPOSE_PROFILES:-}" | grep -q route; then
+  [ -f route/config.json ] || { echo "The route sidecar needs route/config.json (copy route.example.json; see docs/NETWORK.md)."; exit 1; }
+  chmod 700 route; chmod 600 route/config.json
+fi
 chmod 600 .env 2>/dev/null || true
 docker compose build
 docker compose up -d

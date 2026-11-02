@@ -1,6 +1,6 @@
 [project]
 name = "kinoshelf"
-version = "0.1.0"
+version = "0.1.1"
 description = "Self-hosted inbox that names, checks and files new films and episodes into a media library."
 readme = "README.md"
 license = "LicenseRef-KF-SA-1.0"
@@ -12,7 +12,7 @@ dependencies = [
     "uvicorn>=0.32",
     "jinja2>=3.1",
     "python-multipart>=0.0.18",
-    "httpx>=0.28",
+    "httpx[socks]>=0.28",  # socks: SOCKS5 proxies (socksio, about 30 KB)
     "pyyaml>=6.0",
     "guessit>=3.8",
     "rapidfuzz>=3.10",

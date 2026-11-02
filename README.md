@@ -44,6 +44,7 @@ posters left out.
 - [Reaching the app](#reaching-the-app)
 - [The weekly move](#the-weekly-move)
 - [Sources and keys](#sources-and-keys)
+- [Network](#network)
 - [Hooks](#hooks)
 - [Backups](#backups)
 - [Development](#development)
@@ -121,8 +122,8 @@ Nothing is published by default. Pick one or more in `.env`:
 or blocked. The app does not depend on it: it keeps working on the host and the LAN, lookups that
 fail are retried later (items show as "Still working"), and the IMDb copy works offline. If the
 IMDb download is blocked, fetch `title.basics.tsv.gz` and `title.akas.tsv.gz` from
-https://datasets.imdbws.com elsewhere and put them in `data/imdb/`. For lookups through a proxy on the
-host, set Settings > Network > Proxy to `http://host.docker.internal:<port>`.
+https://datasets.imdbws.com elsewhere and put them in `data/imdb/`. When lookups themselves are
+blocked, see [Network](#network).
 
 The container runs as your user with a read-only root filesystem, no Linux capabilities, no new
 privileges, memory, CPU and process limits, and pinned image versions. The tunnel connector is the
@@ -158,6 +159,21 @@ Other commands: `kinoshelf move --dry-run`, `kinoshelf move --for-real`,
 
 Keys are stored only in `data/config.yml` (mode 600) and are never shown again on the page.
 This product uses the TMDB API but is not endorsed or certified by TMDB. TVmaze data is CC BY-SA 4.0.
+
+## Network
+
+Settings > Network picks how lookups reach the internet: **Direct**, through an HTTP or SOCKS5
+**Proxy** (with an optional username and password), or through the optional **Route sidecar**, an
+Xray container beside the app (compose profile `route`) for networks where the way out is a VLESS,
+VMess, Trojan or Shadowsocks server. You choose which sources take that route; Jellyfin stays direct
+unless you say otherwise. **Test connections** tries each source once, without an API key, and shows
+reached or blocked with the time and a short reason, such as a DNS answer that points to a private
+address, a connection reset, a time-out or an HTTP status.
+
+The proxy's address, username and password are write-only on the page (it shows only that they are
+set), and they stay out of the log, hook jobs and backups. The sidecar's server details live only in
+`route/config.json` on the host, which the app never reads. Details in
+[docs/NETWORK.md](docs/NETWORK.md).
 
 ## Hooks
 

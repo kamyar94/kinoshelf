@@ -20,6 +20,8 @@ downloaded when the image is built, or fetched by your own instance at run time.
 | guessit, rebulk | LGPL-3.0 | installed at build time as unmodified libraries |
 | FFmpeg static build (`mwader/static-ffmpeg` image) | GPL (FFmpeg built with GPL libraries) | separate program the app runs |
 | IBM Plex Sans and IBM Plex Mono | SIL Open Font License 1.1 | downloaded at build time by `scripts/fetch-fonts.sh`, served by the app |
+| socksio (through `httpx[socks]`) | MIT | installed at build time, for SOCKS5 proxies |
+| Xray-core (`ghcr.io/xtls/xray-core` image) | MPL-2.0 | optional separate container (compose profile `route`), pulled by you, never built into the app image |
 
 ## Data sources
 

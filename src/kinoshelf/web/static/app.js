@@ -129,7 +129,7 @@
     });
     return body;
   }
-  document.querySelectorAll("form[data-section]").forEach(function (form) {
+  document.querySelectorAll("form[data-section]:not([data-net])").forEach(function (form) {
     var timer = null;
     var out = form.querySelector(".status");
     var save = function () {
@@ -162,6 +162,105 @@
       });
     });
   });
+  // ---- settings: Network. Secrets are write-only: after a save the page only learns "set" or "not set".
+  var net = document.querySelector("form[data-net]");
+  if (net) {
+    var netOut = net.querySelector(".status");
+    var netTimer = null;
+    var clear = [];
+    var mode = function () {
+      var m = net.querySelector('input[name="mode"]:checked');
+      return m ? m.value : "direct";
+    };
+    var showMode = function () {
+      var m = mode();
+      net.querySelectorAll("[data-when]").forEach(function (el) { el.hidden = el.getAttribute("data-when") !== m; });
+      net.querySelector("fieldset.uses").disabled = m === "direct";
+    };
+    var showSecret = function (box, isSet) {
+      box.setAttribute("data-set", isSet ? "yes" : "no");
+      box.querySelector(".secret-state").hidden = !isSet;
+      box.querySelector(".secret-edit").hidden = isSet;
+      box.querySelector("[data-keep]").hidden = !isSet;
+      var inp = box.querySelector("input");
+      inp.value = "";
+      inp.placeholder = box.getAttribute("data-secret") === "address" ? "proxy.example.invalid:8080" :
+        (isSet ? "Type the new one" : "Not set");
+    };
+    var netBody = function () {
+      var body = { mode: mode(), use: {}, clear: clear.slice() };
+      var k = net.querySelector('input[name="kind"]:checked');
+      body.kind = k ? k.value : "http";
+      net.querySelectorAll('input[name^="use."]').forEach(function (c) { body.use[c.name.slice(4)] = c.checked; });
+      body.timeout_seconds = net.querySelector('[name="timeout_seconds"]').value;
+      net.querySelectorAll("[data-secret-input]").forEach(function (inp) { if (inp.value.trim()) { body[inp.name] = inp.value; } });
+      return body;
+    };
+    var netSave = function () {
+      window.clearTimeout(netTimer);
+      netTimer = null;
+      say(netOut, "Saving…");
+      var body = netBody();
+      clear = [];
+      return post("/api/settings/network", body).then(function (j) {
+        say(netOut, j.note || "Saved", j.note ? "err" : "ok");
+        if (j.set) {
+          net.querySelectorAll("[data-secret]").forEach(function (box) {
+            var f = box.getAttribute("data-secret");
+            var typed = box.querySelector("input").value.trim() !== "";
+            var editing = !box.querySelector(".secret-edit").hidden;
+            if (typed || !editing || !j.set[f]) { showSecret(box, !!j.set[f]); }
+          });
+        }
+      }).catch(function (e) { say(netOut, e.message, "err"); });
+    };
+    var later = function (ms) { window.clearTimeout(netTimer); netTimer = window.setTimeout(netSave, ms); };
+    net.addEventListener("submit", function (ev) { ev.preventDefault(); netSave(); });
+    net.addEventListener("change", function (ev) {
+      if (ev.target.name === "mode") { showMode(); }
+      later(250);
+    });
+    net.addEventListener("input", function (ev) {
+      if (ev.target.hasAttribute("data-secret-input")) { return; }  // secrets save when you leave the box
+      later(1200);
+    });
+    net.querySelectorAll("[data-secret]").forEach(function (box) {
+      var inp = box.querySelector("input");
+      box.querySelector("[data-replace]").addEventListener("click", function () {
+        box.querySelector(".secret-state").hidden = true;
+        box.querySelector(".secret-edit").hidden = false;
+        box.querySelector("[data-keep]").hidden = false;
+        inp.placeholder = box.getAttribute("data-secret") === "address" ? "proxy.example.invalid:8080" : "Type the new one";
+        inp.focus();
+      });
+      box.querySelector("[data-keep]").addEventListener("click", function () { showSecret(box, true); });
+      box.querySelector("[data-remove]").addEventListener("click", function () {
+        clear.push(box.getAttribute("data-secret"));
+        netSave();
+      });
+      inp.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") { ev.preventDefault(); inp.blur(); }
+      });
+    });
+    var testBtn = net.querySelector("[data-nettest]");
+    var results = net.querySelector("[data-results]");
+    testBtn.addEventListener("click", function () {
+      testBtn.disabled = true;
+      results.setAttribute("aria-busy", "true");
+      results.innerHTML = '<p class="empty-box small">Trying each source…</p>';
+      (netTimer ? netSave() : Promise.resolve()).then(function () {
+        return fetch("/api/network/test", {
+          method: "POST", headers: { "X-CSRF-Token": csrf }, credentials: "same-origin"
+        });
+      }).then(function (r) {
+        if (!r.ok) { throw new Error("Error " + r.status); }
+        return r.text();
+      }).then(function (html) { results.innerHTML = html; })
+        .catch(function (e) { results.innerHTML = ""; say(netOut, "Test failed: " + e.message, "err"); })
+        .then(function () { results.removeAttribute("aria-busy"); testBtn.disabled = false; });
+    });
+  }
+
   var acct = document.querySelector("form[data-account]");
   if (acct) {
     acct.addEventListener("submit", function (ev) {

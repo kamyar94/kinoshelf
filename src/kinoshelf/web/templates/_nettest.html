@@ -1,0 +1,10 @@
+<ul class="netres">
+  {% for r in results %}
+  <li class="netrow">
+    <span class="nr-who"><span class="dot {{ 'good' if r.ok else ('warn' if r.ok is false else 'none') }}" aria-hidden="true"></span><span class="strong">{{ r.name }}</span><span class="small muted">{{ r.route_text }}</span></span>
+    <span class="nr-out"><span class="badge {{ 'good' if r.ok else ('warn' if r.ok is false else 'kept') }}">{{ r.outcome }}</span><span class="mono small nr-ms">{{ r.time_text }}</span></span>
+    <span class="nr-why small soft">{{ r.reason }}</span>
+  </li>
+  {% endfor %}
+</ul>
+<p class="small muted">Tested at {{ at }} with the saved settings · {{ reached }} of {{ tested }} reached</p>
