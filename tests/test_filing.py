@@ -157,6 +157,25 @@ def test_a_second_copy_becomes_a_version_or_waits():
     assert engine(lib, own).resolve(it, cand).folder_new
 
 
+def test_dub_words_can_be_regular_expressions_and_hardsubs_name_the_nearest_language():
+    from kinoshelf.filing import LANG_NAMES, hardsub_language
+
+    pol = {"dub_words": [r"/dub(bed)?\b|ja[ ._-]?dub/"]}
+    it, cand = film("Heat", 1995, "Inbox/Heat.1995.JaDubbed.mkv")
+    assert Item(it, cand, pol).dubbed("ja")  # glued: the expression finds it, a plain word would not
+    assert not Item(it, cand, {"dub_words": ["dubbed"]}).dubbed("ja")
+    assert validate({"policies": {"dub_words": ["/dub(/"]}, "rules": []})[0].startswith("The dub word /dub(/ is not")
+    assert hardsub_language("Heat.1995.English.Audio.French.HardSub") == "fr"  # nearest to the word, not the first
+    assert hardsub_language("Heat.1995.FrenchHardSub") == "fr" and hardsub_language("Heat.1995.HC") is None
+    assert hardsub_language("Heat.1995.English.HardSub", ["fr"]) == ""
+    assert {LANG_NAMES[c] for c in ("en", "ja", "fa", "zh")} == {"English", "Japanese", "Persian", "Chinese"}
+    lib = ["Movies/Films/Heat (1995)/Heat (1995).mkv"]
+    it, cand = film("Heat", 1995, "Inbox/Heat.1995.German.HardSub.mkv", width=1280, height=544)
+    assert engine(lib).resolve(it, cand).stem == "Heat (1995) - 720p German Hardsub"
+    only = dict(RULES, policies=dict(RULES["policies"], hardsub_languages=["fr"]))
+    assert engine(lib, only).resolve(it, cand).stem == "Heat (1995) - 720p Hardsub"
+
+
 def test_episodes_new_and_existing_shows():
     r = engine(["Series/The Office (2005)/Season 02/The Office S02E01 - The Dundies.mkv"])
     it = {"src_rel": "Inbox/the.office.s02e01.mkv", "parsed": {"season": 2, "episodes": [1]}, "probe": {}}

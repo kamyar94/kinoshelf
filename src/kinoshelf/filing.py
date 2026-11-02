@@ -46,8 +46,9 @@ POLICIES = {
     "dub_language": "",  # the language "dubbed" refers to for tags, versions and folder matching ("" = none)
     "dub_label": "Dubbed",  # the tag a dubbed copy's folder carries (matching existing folders by audio)
     "original_audio_label": "Original audio",
-    "dub_words": ["dubbed", "dub"],  # release-name words that mark a dubbed copy
+    "dub_words": ["dubbed", "dub"],  # release-name words that mark a dubbed copy; /.../ is a regular expression
     "hardsub_label": "{Lang} Hardsub",
+    "hardsub_languages": [],  # languages a hardsub label names (empty: any); other hardsubs are labelled "Hardsub"
     "hold_copies": True,  # a copy of something already filed waits on the review page
     "artwork": True,  # pictures that came with a new film get poster / backdrop / disc names
 }
@@ -67,11 +68,11 @@ LANGS = {
     "en": ("en", "eng", "english"), "fr": ("fr", "fre", "fra", "french"), "de": ("de", "ger", "deu", "german"),
     "es": ("es", "spa", "spanish"), "it": ("it", "ita", "italian"), "ja": ("ja", "jpn", "japanese"),
     "ko": ("ko", "kor", "korean"), "zh": ("zh", "chi", "zho", "chinese"), "ru": ("ru", "rus", "russian"),
-    "tr": ("tr", "tur", "turkish"), "ar": ("ar", "ara", "arabic"), "fa": ("fa", "fas", "per", "persian", "farsi"),
+    "tr": ("tr", "tur", "turkish"), "ar": ("ar", "ara", "arabic"), "fa": ("fa", "fas", "per", "farsi", "persian"),
     "hi": ("hi", "hin", "hindi"), "pt": ("pt", "por", "portuguese"), "nl": ("nl", "dut", "nld", "dutch"),
     "sv": ("sv", "swe", "swedish"), "pl": ("pl", "pol", "polish"), "he": ("he", "heb", "hebrew"),
 }
-LANG_NAMES = {k: v[-1].capitalize() for k, v in LANGS.items()}
+LANG_NAMES = {k: v[-1].capitalize() for k, v in LANGS.items()}  # the English name: last in each tuple
 
 
 class FilingError(ValueError):
@@ -162,6 +163,47 @@ def show_name_of(folder: str) -> str:
     return re.sub(r"\s*\(\d{4}\)\s*$", "", s).strip()
 
 
+def word_pattern(w: str) -> re.Pattern:
+    """A release-name word, matched as a whole word in any case; written as /.../ it is a regular expression."""
+    w = str(w or "")
+    if len(w) > 2 and w.startswith("/") and w.endswith("/"):
+        return re.compile(w[1:-1], re.I)
+    if re.fullmatch(r"[\w ]+", w):
+        return re.compile(rf"(?<![a-z]){re.escape(w)}(?![a-z])", re.I)
+    return re.compile(re.escape(w), re.I)
+
+
+def word_patterns(words: list) -> list[re.Pattern]:
+    out = []
+    for w in words:
+        try:
+            out.append(word_pattern(w))
+        except re.error:
+            continue  # validate() names it
+    return out
+
+
+def hardsub_language(joined: str, allowed: list | None = None) -> str | None:
+    """The language of burnt-in subtitles by the release name: the language word nearest to "hardsub" (it may be
+    glued on, as in "FrenchHardSub"). None without a hardsub word; "" when no (allowed) language is named."""
+    m = re.search(r"(?i)hard-?sub", joined)
+    if not m:
+        return None
+    want = {lang_code(a) for a in allowed or []}
+    best: tuple[int, str] | None = None
+    for code, names in LANGS.items():
+        if want and code not in want:
+            continue
+        for n in names:
+            if len(n) <= 3:
+                continue
+            for lm in re.finditer(rf"(?i)(?<![a-z]){n}(?=hard|sub|dub|[^a-z]|$)", joined):
+                gap = m.start() - lm.end() if lm.end() <= m.start() else max(0, lm.start() - m.end())
+                if best is None or gap < best[0]:
+                    best = (gap, code)
+    return best[1] if best else ""
+
+
 def _join(shown: str, name: str) -> str:
     return str(pure(shown) / name)
 
@@ -207,9 +249,7 @@ class Item:
         self.in_library = False
 
     def dubbed(self, lang: str) -> bool:
-        words = self.pol.get("dub_words") or []
-        if any(re.search(rf"(?i)(?<![a-z]){re.escape(w)}(?![a-z])" if re.fullmatch(r"[\w ]+", w) else re.escape(w), n or "")
-               for w in words for n in self.names):
+        if any(rx.search(n or "") for rx in word_patterns(self.pol.get("dub_words") or []) for n in self.names):
             return True
         if not lang or not self.language:
             return False
@@ -335,9 +375,21 @@ def validate(cfg: dict) -> list[str]:
                 elif k == "not":
                     stack.append(v)
         out += [f"Rule {i}: unknown policy {k}" for k in (r.get("policies") or {}) if k not in POLICIES]
+        out += [f"Rule {i}: {e}" for e in _policy_problems(r.get("policies") or {})]
         if not r.get("root") and not r.get("hold") and r.get("enabled", True):
             out.append(f"Rule {i}: no root folder")
     out += [f"Unknown policy {k}" for k in (cfg or {}).get("policies") or {} if k not in POLICIES]
+    out += _policy_problems((cfg or {}).get("policies") or {})
+    return out
+
+
+def _policy_problems(pol: dict) -> list[str]:
+    out = []
+    for w in pol.get("dub_words") or []:
+        try:
+            word_pattern(w)
+        except re.error as e:
+            out.append(f"The dub word {w} is not a valid regular expression ({e})")
     return out
 
 
@@ -601,9 +653,9 @@ class Rules:
             words.append(label)
         if re.search(r"(?i)extended", joined):
             words.append("Extended")
-        if re.search(r"(?i)hard-?sub", joined):
-            hl = next((LANG_NAMES[c] for c, ns in LANGS.items() if any(re.search(rf"(?i)(?<![a-z]){n}(?![a-z])", joined)
-                                                                       for n in ns if len(n) > 3)), "")
+        hs = hardsub_language(joined, pol.get("hardsub_languages") or [])
+        if hs is not None:
+            hl = LANG_NAMES.get(hs, "")
             words.append(render(pol.get("hardsub_label", "{Lang} Hardsub"), {"Lang": hl}).strip() if hl else "Hardsub")
         m3 = THREE_D.search(joined) if re.search(r"(?i)(?<![a-z0-9])3d(?![a-z])", joined) else None
         if m3:

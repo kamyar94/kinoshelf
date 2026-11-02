@@ -63,6 +63,11 @@ used to tell copies apart; whether copies wait on the review page; Latin titles 
 came with a film get Jellyfin's names. Existing folders are found by the IDs in their folder-icon file names, then
 by title and year; collection folders by their TMDB id or name.
 
+`dub_words` are matched as whole words in any case; write one between slashes (`/ja[ ._-]?dub/`) for a regular
+expression. A version with burnt-in subtitles is labelled by `hardsub_label` with the language word nearest to
+"hardsub" in its name (`720p French Hardsub`); `hardsub_languages` limits which languages are named, and any other
+hardsub is labelled `Hardsub`.
+
 Subtitles that come with a file are named `<name>.<language>[.forced|.sdh].<ext>` (a second one of a language
 `.alt`), with the language from the file name or the text; picture subtitles go to `Other Files` with an `.ignore`
 marker. Folder icons and full details files are hooks that read where the rules filed an item (see
