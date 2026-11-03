@@ -919,8 +919,8 @@ def _validate(core: App, section: str, body: dict):
         if channel not in updater.CHANNEL_TAGS:
             raise ValueError("Pick a channel: every change or releases only")
         cur.update(enabled=bool(body.get("enabled")), channel=channel,
-                   interval_hours=_num(body.get("interval_hours", cur.get("interval_hours", 6)), 1, 168,
-                                       "Check every"))
+                   interval_minutes=int(_num(body.get("interval_minutes", cur.get("interval_minutes", 30)),
+                                             updater.MIN_INTERVAL_MINUTES, 10080, "Check every (minutes)")))
         return cur, note
     if section == "server":
         for k in ("public_url", "lan_url"):

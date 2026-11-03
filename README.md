@@ -220,7 +220,7 @@ set), and they stay out of the log, hook jobs and backups. The sidecar's server 
 ## Updates
 
 Every change pushed to `main` builds a signed image on GitHub's container registry. The `updater`
-service checks it every few hours (or when you press **Check now** or **Update now** in Settings >
+service checks it every 30 minutes (or when you press **Check now** or **Update now** in Settings >
 Updates), downloads it by digest and checks every part. A host step run by a timer
 (`scripts/update/apply.sh`) loads it, refuses it when it cannot carry out your current settings, keeps
 the running image as the previous one, restarts, makes sure

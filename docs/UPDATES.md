@@ -21,7 +21,8 @@ Each image carries its version and commit as labels (`org.opencontainers.image.v
 run's summary lists its digest and the command to check its signature.
 
 **The updater** (service `updater` in `docker-compose.yml`) runs the same image with `kinoshelf update-agent`.
-Every few hours (Settings > Updates > Check every), or when you press a button, it asks the registry which image
+Every 30 minutes by default (Settings > Updates > Check every, in minutes, 10 at least), or when you press a
+button, it asks the registry which image
 the channel's tag points at. When that image is newer than the running one, it downloads it by digest and checks
 every part against its digest while it downloads: a part that does not match throws the whole download away.
 With `update.verify: cosign` in `data/config.yml` it also checks the signature (see "Signature checks" below). It

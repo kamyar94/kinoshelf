@@ -213,7 +213,7 @@
   <fieldset class="upd-how">
     <legend>How it updates</legend>
     <label class="check"><input type="checkbox" name="enabled" {% if upd.enabled %}checked{% endif %}> Install updates by themselves</label>
-    <label>Check every (hours) <input name="interval_hours" type="number" min="1" max="168" value="{{ upd.interval }}" class="short"></label>
+    <label>Check every (minutes) <input name="interval_minutes" type="number" min="10" max="10080" value="{{ upd.interval }}" class="short"></label>
     <label>Channel <select name="channel">
       <option value="latest" {% if upd.channel == 'latest' %}selected{% endif %}>Every change (latest)</option>
       <option value="stable" {% if upd.channel == 'stable' %}selected{% endif %}>Releases only (stable)</option>

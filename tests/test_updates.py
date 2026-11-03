@@ -28,7 +28,7 @@ from kinoshelf.updater import Agent, choose, compare_versions, due
 from kinoshelf.web import App, create_app
 
 ROOT = Path(__file__).resolve().parents[1]
-CFG = {"enabled": True, "interval_hours": 6, "channel": "latest", "allow_downgrade": False}
+CFG = {"enabled": True, "interval_minutes": 30, "channel": "latest", "allow_downgrade": False}
 
 
 # ---------------------------------------------------------------------- decisions
@@ -39,7 +39,7 @@ def test_versions_compare_by_number():
 
 def test_due_follows_the_interval_or_a_request():
     assert due(CFG, 0, 1000, None)
-    assert not due(CFG, 1000, 1000 + 3600, None) and due(CFG, 1000, 1000 + 6 * 3600, None)
+    assert not due(CFG, 1000, 1000 + 20 * 60, None) and due(CFG, 1000, 1000 + 30 * 60, None)
     assert due(CFG, 1000, 1001, "check")
 
 
@@ -259,8 +259,9 @@ def test_a_failed_check_is_tried_again_sooner_with_a_back_off(agent_env):
     from kinoshelf.updater import retry_wait, view
 
     agent, s, fr, clock, d = agent_env
-    assert [retry_wait(CFG, n) / 60 for n in range(5)] == [360, 12, 24, 48, 96]
-    assert retry_wait(CFG, 9) == 6 * 3600  # never longer than the interval
+    assert [retry_wait(CFG, n) / 60 for n in range(5)] == [30, 12, 24, 30, 30]
+    assert retry_wait(CFG, 9) == 30 * 60  # never longer than the interval
+    assert retry_wait(dict(CFG, interval_minutes=1), 0) == 10 * 60  # never more often than every 10 minutes
     good = dict(fr.manifests)
     fr.manifests.clear()
     t0 = clock[0]
@@ -276,8 +277,8 @@ def test_a_failed_check_is_tried_again_sooner_with_a_back_off(agent_env):
     clock[0] += 24 * 60
     st = agent.run_once()
     assert st["last_check"]["ok"] and st["failures"] == 0
-    clock[0] += 60 * 60
-    assert agent.run_once()["last_check"]["at"] == clock[0] - 60 * 60  # back to the 6-hour interval
+    clock[0] += 20 * 60
+    assert agent.run_once()["last_check"]["at"] == clock[0] - 20 * 60  # back to the 30-minute interval
 
 
 def test_cosign_mode_needs_a_good_signature(agent_env):
@@ -505,10 +506,12 @@ def test_updates_panel_settings_and_requests(client):
     html = c.get("/settings").text
     assert 'id="h-upd"' in html and "The updater is not running" in html and "Update now" in html
     assert 'name="use.updates"' in html  # the registry route is a Network toggle too
-    r = c.post("/api/settings/update", json={"enabled": False, "interval_hours": 12, "channel": "stable"},
+    r = c.post("/api/settings/update", json={"enabled": False, "interval_minutes": 45, "channel": "stable"},
                headers={"X-CSRF-Token": csrf})
     assert r.status_code == 200 and core.settings.get("update.channel") == "stable"
-    assert core.settings.get("update.enabled") is False and core.settings.get("update.interval_hours") == 12
+    assert core.settings.get("update.enabled") is False and core.settings.get("update.interval_minutes") == 45
+    assert c.post("/api/settings/update", json={"interval_minutes": 5, "channel": "latest"},
+                  headers={"X-CSRF-Token": csrf}).status_code == 400
     assert c.post("/api/settings/update", json={"channel": "nightly"}, headers={"X-CSRF-Token": csrf}).status_code == 400
     assert c.post("/api/update/update", headers={"X-CSRF-Token": csrf}).json()["ok"]
     req = json.loads((core.data_dir / "update" / "request.json").read_text())
@@ -536,3 +539,15 @@ def test_panel_and_week_show_state_and_history(client):
     assert panel.index("Rolled back") < panel.index("healthy after 19 s")  # newest first
     assert "Seen just now" in panel and "registry reached directly" in panel
     assert "Updates" in c.get("/week").text and "up to date" in c.get("/week").text
+
+
+def test_old_update_interval_in_hours_becomes_minutes(tmp_path):
+    for hours, minutes in ((6, 30), (12, 720), (1, 60)):
+        f = tmp_path / f"c{hours}.yml"
+        f.write_text(f"update:\n  interval_hours: {hours}\n", encoding="utf-8")
+        s = Settings(f)
+        assert s.get("update.interval_minutes") == minutes and "interval_hours" not in s.get("update")
+        assert "interval_hours" not in f.read_text(encoding="utf-8")  # saved back in the new form
+    f = tmp_path / "both.yml"
+    f.write_text("update:\n  interval_hours: 6\n  interval_minutes: 15\n", encoding="utf-8")
+    assert Settings(f).get("update.interval_minutes") == 15

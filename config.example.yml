@@ -90,7 +90,7 @@ watcher: {poll_seconds: 30, settle_seconds: 120}
 
 update:                          # Settings > Updates; see docs/UPDATES.md
   enabled: true                  # install new versions by themselves (the host step applies them)
-  interval_hours: 6
+  interval_minutes: 30
   channel: latest                # latest: every change on main; stable: tagged releases
   image: ghcr.io/kamyar94/kinoshelf
   verify: digest                 # digest, or cosign to check the signature too

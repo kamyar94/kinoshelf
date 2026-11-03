@@ -99,12 +99,13 @@ def compare_versions(a: str, b: str) -> int:
 
 
 RETRY_FIRST_SECONDS = 12 * 60  # a check that failed is tried again after 12 min, then 24, 48 ... up to the interval
+MIN_INTERVAL_MINUTES = 10
 
 
 def retry_wait(cfg: dict, failures: int) -> float:
     """Seconds until the next check: the interval, or after failed checks a back-off that starts at 12 minutes,
     doubles each time and never waits longer than the interval."""
-    interval = float(cfg.get("interval_hours", 6) or 6) * 3600
+    interval = max(MIN_INTERVAL_MINUTES, float(cfg.get("interval_minutes", 30) or 30)) * 60
     if failures <= 0:
         return interval
     return min(interval, RETRY_FIRST_SECONDS * 2 ** min(failures - 1, 16))
@@ -373,5 +374,5 @@ def view(data_dir: Path, settings, now: float | None = None) -> dict:
         f" · running {_label(cur)}" + (f" · checked {_when(check.get('at'))}" if check else "")
     return {"title": state[0], "ok": state[1], "text": state[2], "facts": facts, "history": hist,
             "last_update": last_update, "week": week, "image": cfg.get("image", ""),
-            "enabled": bool(cfg.get("enabled", True)), "interval": cfg.get("interval_hours", 6),
+            "enabled": bool(cfg.get("enabled", True)), "interval": cfg.get("interval_minutes", 30),
             "channel": cfg.get("channel", "latest")}

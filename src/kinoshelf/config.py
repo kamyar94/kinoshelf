@@ -135,7 +135,7 @@ DEFAULTS: dict[str, Any] = {
     # Updates (docs/UPDATES.md): the updater container fetches and checks new images; a host step applies them.
     "update": {
         "enabled": True,  # install new versions by themselves; off: only when you press Update now
-        "interval_hours": 6,
+        "interval_minutes": 30,  # a check is one small registry request; the image downloads only when it is new
         "channel": "latest",  # latest: every change on main; stable: tagged releases
         "image": "ghcr.io/kamyar94/kinoshelf",
         "verify": "digest",  # digest: every part checked against its digest; cosign: also the signature
@@ -216,7 +216,24 @@ class Settings:
 def migrate(values: dict, raw: dict) -> bool:
     """Bring settings written by an older version up to date. True when something changed."""
     changed = _migrate_network(values, raw)
+    changed = _migrate_update_interval(values, raw) or changed
     return _migrate_playback(values, raw) or changed
+
+
+def _migrate_update_interval(values: dict, raw: dict) -> bool:
+    """Before 0.4.3 the update check ran every update.interval_hours (default 6). It becomes interval_minutes:
+    the old default turns into the new one (30), any other value keeps its length."""
+    upd = values.get("update")
+    if not isinstance(upd, dict) or "interval_hours" not in upd:
+        return False
+    hours = upd.pop("interval_hours")
+    if "interval_minutes" not in (((raw or {}).get("update")) or {}):
+        try:
+            h = float(hours)
+        except (TypeError, ValueError):
+            h = 6.0
+        upd["interval_minutes"] = 30 if h == 6 else max(10, min(10080, round(h * 60)))
+    return True
 
 
 def _migrate_playback(values: dict, raw: dict) -> bool:
