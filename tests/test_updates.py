@@ -214,6 +214,17 @@ def test_agent_fetches_a_newer_image_once(agent_env):
     assert "waiting for the host step" in agent.run_once()["message"]
 
 
+def test_after_the_host_step_the_panel_says_what_runs(agent_env, monkeypatch):
+    agent, s, fr, clock, d = agent_env
+    assert agent.run_once()["state"] == "ready"
+    for f in ("ready.json", "ready.env"):  # the host step installed it and cleaned up
+        (d / f).unlink()
+    monkeypatch.setenv("KS_REVISION", "bbbbbbb")  # the new image runs
+    clock[0] += 30
+    st = agent.run_once()
+    assert st["state"] == "idle" and st["message"] == "Up to date"
+
+
 def test_agent_respects_off_downgrade_and_rejected(agent_env):
     agent, s, fr, clock, d = agent_env
     s.values["update"]["enabled"] = False
