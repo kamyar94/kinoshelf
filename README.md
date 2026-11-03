@@ -9,7 +9,7 @@ A self-hosted inbox for new films and episodes. Drop a video into the Inbox fold
    OpenSubtitles file hash, and your Jellyfin library), and scores each match on title (original and
    alternative titles included), year, running time against the real file length, and file hash;
 4. gives it its final name inside the Inbox, from naming templates you set, and runs optional hooks
-   (device check and rewrap, subtitles, NFO, poster or folder icon);
+   (make it play on your device, subtitles, NFO, poster or folder icon);
 5. once a week, moves everything it is sure about into the library and asks your media server to
    look at just those folders.
 
@@ -34,7 +34,7 @@ you. Each card shows the checks behind its score; the destination path follows t
 | ![This week](docs/screenshots/week.png) | ![Network settings after Test connections](docs/screenshots/settings.png) | ![Updates settings](docs/screenshots/updates.png) | ![Review page on a phone](docs/screenshots/review-phone.png) |
 
 Taken from a demo instance: generated test-pattern videos, live TVmaze lookups (no other keys),
-posters left out. The Network panel went through a local test proxy that blocks two sources on
+posters left out. The playback results are real runs on generated test patterns. The Network panel went through a local test proxy that blocks two sources on
 purpose; the Updates history is from the end-to-end test, where a broken release was rolled back.
 
 ## Contents
@@ -46,6 +46,7 @@ purpose; the Updates history is from the end-to-end test, where a broken release
 - [The weekly move](#the-weekly-move)
 - [Sources and keys](#sources-and-keys)
 - [Filing rules](#filing-rules)
+- [Make it play on your device](#make-it-play-on-your-device)
 - [Network](#network)
 - [Updates](#updates)
 - [Hooks](#hooks)
@@ -179,6 +180,28 @@ Optional hooks make Windows folder icons and full details files for what the rul
 
 ![Filing rules](docs/screenshots/filing.png)
 
+## Make it play on your device
+
+Settings > Playback names the device you watch on: a neutral profile (plays almost anywhere, a recent or an older
+smart TV, a web browser, Apple devices, Android TV and streaming sticks) or your own lists. A file the device would
+not play gets, in this order:
+
+- a **rewrap** into a container the device opens, kept only when it loses nothing: every picture decodes to the
+  same image (a hash per picture, the same count, times in order), the sound decodes the same (or, where a track
+  had to become AAC, stays in step within 20 ms), the lengths match within 0.1 s, and the streams, languages and
+  picture size are unchanged;
+- if you turn it on, a **re-encode** with x264 (slow by default), kept only when VMAF, measured against the
+  original picture by picture, reaches the mean, 1% low and lowest-minute thresholds you set, and the new file is
+  smaller than the original; otherwise the original stays.
+
+The original is never deleted: it goes to `Playback originals` in the set-aside folder on the same drive, every
+step is written to `data/playback/journal.jsonl`, and the week page shows each item's checks with a **Put the
+original back** button. Details in [docs/PLAYBACK.md](docs/PLAYBACK.md).
+
+![Settings > Playback](docs/screenshots/playback-settings.png)
+
+![What was done to a file, on the week page](docs/screenshots/playback.png)
+
 ## Network
 
 Settings > Network picks how lookups reach the internet: **Direct**, through an HTTP or SOCKS5
@@ -210,8 +233,8 @@ Docker Desktop in [docs/UPDATES.md](docs/UPDATES.md).
 
 Optional steps run as hooks, each one a **command** inside the container, an **http** service, or a
 **folder** where the app leaves a job file and another program (for example a Windows script on the
-host) answers with a result file. The shipped hooks check playback against your device profile (and
-can rewrap or convert), fetch subtitles with subliminal in your language order, write NFO files, and
+host) answers with a result file. The shipped hooks make files play on your device (see above), fetch
+subtitles with subliminal in your language order, write NFO files, and
 save posters. The protocol is in [docs/HOOKS.md](docs/HOOKS.md).
 
 ## Backups
