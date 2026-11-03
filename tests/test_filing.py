@@ -157,6 +157,32 @@ def test_a_second_copy_becomes_a_version_or_waits():
     assert engine(lib, own).resolve(it, cand).folder_new
 
 
+def test_which_title_a_rule_uses_by_script_and_which_translation():
+    from kinoshelf.filing import lang_code
+    from kinoshelf.sources.tmdb import _facts
+
+    tr = {"translations": [{"iso_639_1": "ja", "iso_3166_1": "JP", "data": {"title": "一"}},
+                           {"iso_639_1": "ja", "iso_3166_1": "JP", "data": {"title": "二"}},
+                           {"iso_639_1": "fr", "iso_3166_1": "FR", "data": {"title": ""}}]}
+    facts = _facts({"original_language": "ja", "translations": tr,
+                    "alternative_titles": {"titles": [{"iso_3166_1": "FR", "title": "Le Titre"}]}}, "movie")
+    assert facts["translations"] == {"ja": "一"} and facts["translations_all"] == {"ja": ["一", "二"], "fr": [""]}
+    it, cand = film("Heat", 1995, "Inbox/Heat.1995.mkv", lang="ja")
+    cand["facts"] = facts
+    assert Item(it, cand, {}).translated("ja") == "一"  # first, by default
+    assert Item(it, cand, {"translation_pick": "last"}).translated("ja") == "二"
+    assert Item(it, cand, {"translation_pick": "last"}).translated("fr/FR") == "Le Titre"  # last one untitled
+    arabic = dict(cand, title="فيلم", original_title="映画")  # a title in Arabic script, the original in another
+    assert Item(it, arabic, {}).title() == "فيلم"
+    assert Item(it, arabic, {"original_title_for_scripts": ["arabic"]}).title() == "映画"
+    cyr = dict(cand, title="Солярис", original_title="Solaris")
+    assert Item(it, cyr, {}).title() == "Solaris" and Item(it, cyr, {"latin_titles": False}).title() == "Солярис"
+    assert validate({"policies": {"translation_pick": "middle", "original_title_for_scripts": ["klingon"]},
+                     "rules": []}) == ["The translation pick middle is not in this version",
+                                       "The script klingon is not in this version"]
+    assert lang_code("far") == "fa"
+
+
 def test_dub_words_can_be_regular_expressions_and_hardsubs_name_the_nearest_language():
     from kinoshelf.filing import LANG_NAMES, hardsub_language
 

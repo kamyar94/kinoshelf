@@ -43,6 +43,12 @@ POLICIES = {
     "trailer_max_minutes": 6,
     "part_label": " - part{Part}",
     "latin_titles": True,  # a Title in another script than its OriginalTitle's Latin one: use the original
+    # a Title with letters of one of these scripts, when its OriginalTitle has none: use the original
+    # (arabic, cyrillic, greek, hebrew, cjk, devanagari, thai)
+    "original_title_for_scripts": [],
+    # which title {TranslatedTitle:xx} takes when TMDB lists several for one language: first (the first with a title)
+    # | last (the last listed; when that one has no title, the next part of the token is tried)
+    "translation_pick": "first",
     "dub_language": "",  # the language "dubbed" refers to for tags, versions and folder matching ("" = none)
     "dub_label": "Dubbed",  # the tag a dubbed copy's folder carries (matching existing folders by audio)
     "original_audio_label": "Original audio",
@@ -62,13 +68,22 @@ THREE_D = re.compile(r"(?i)(?<![a-z])(hsbs|h-sbs|half-sbs|sbs|htab|h-tab|tab|fsb
 THREE_D_NAMES = {"hsbs": "HSBS", "h-sbs": "HSBS", "half-sbs": "HSBS", "sbs": "SBS", "htab": "HTAB", "h-tab": "HTAB",
                  "tab": "TAB", "fsbs": "FSBS", "ftab": "FTAB", "mvc": "MVC"}
 LATIN = re.compile(r"^[\x00-\x7f\u00c0-\u024f\u1e00-\u1eff]*$")
+SCRIPTS = {
+    "arabic": re.compile(r"[\u0600-\u06ff\u0750-\u077f\ufb50-\ufdff\ufe70-\ufeff]"),
+    "cyrillic": re.compile(r"[\u0400-\u04ff]"),
+    "greek": re.compile(r"[\u0370-\u03ff]"),
+    "hebrew": re.compile(r"[\u0590-\u05ff]"),
+    "cjk": re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]"),
+    "devanagari": re.compile(r"[\u0900-\u097f]"),
+    "thai": re.compile(r"[\u0e00-\u0e7f]"),
+}
 TOKEN = re.compile(r"\{([^{}]*)\}")
 # Language codes as media files and release names write them (ISO 639-1 first).
 LANGS = {
     "en": ("en", "eng", "english"), "fr": ("fr", "fre", "fra", "french"), "de": ("de", "ger", "deu", "german"),
     "es": ("es", "spa", "spanish"), "it": ("it", "ita", "italian"), "ja": ("ja", "jpn", "japanese"),
     "ko": ("ko", "kor", "korean"), "zh": ("zh", "chi", "zho", "chinese"), "ru": ("ru", "rus", "russian"),
-    "tr": ("tr", "tur", "turkish"), "ar": ("ar", "ara", "arabic"), "fa": ("fa", "fas", "per", "farsi", "persian"),
+    "tr": ("tr", "tur", "turkish"), "ar": ("ar", "ara", "arabic"), "fa": ("fa", "fas", "per", "far", "farsi", "persian"),
     "hi": ("hi", "hin", "hindi"), "pt": ("pt", "por", "portuguese"), "nl": ("nl", "dut", "nld", "dutch"),
     "sv": ("sv", "swe", "swedish"), "pl": ("pl", "pol", "polish"), "he": ("he", "heb", "hebrew"),
 }
@@ -273,6 +288,8 @@ class Item:
                 continue
             if part.isupper():  # a country: its alternative title
                 v = next(iter((self.facts.get("alt_titles") or {}).get(part) or []), "")
+            elif self.pol.get("translation_pick") == "last" and (self.facts.get("translations_all") or {}).get(part):
+                v = (self.facts["translations_all"][part][-1] or "")
             else:
                 v = (self.facts.get("translations") or {}).get(part) or (self.facts.get(f"{part}_title") or "")
             if v and norm(v) != norm(title):
@@ -286,6 +303,10 @@ class Item:
         o = self.cand.get("original_title") or ""
         if self.pol.get("latin_titles", True) and not LATIN.match(t) and o and LATIN.match(o):
             return safe(o)
+        for name in self.pol.get("original_title_for_scripts") or []:
+            rx = SCRIPTS.get(str(name).lower())
+            if rx and rx.search(t) and o and not rx.search(o):
+                return safe(o)
         return safe(t)
 
 
@@ -385,6 +406,10 @@ def validate(cfg: dict) -> list[str]:
 
 def _policy_problems(pol: dict) -> list[str]:
     out = []
+    if pol.get("translation_pick", "first") not in ("first", "last"):
+        out.append(f"The translation pick {pol.get('translation_pick')} is not in this version")
+    out += [f"The script {s} is not in this version" for s in pol.get("original_title_for_scripts") or []
+            if str(s).lower() not in SCRIPTS]
     for w in pol.get("dub_words") or []:
         try:
             word_pattern(w)

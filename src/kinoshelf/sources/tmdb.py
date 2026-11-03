@@ -279,10 +279,13 @@ def _facts(d: dict, kind: str) -> dict:
     """What filing rules read from a TMDB detail record (films: kind "movie", series: "tv"): genres, keywords,
     countries, original language, the title in every language TMDB has, and alternative titles by country."""
     translations: dict[str, str] = {}
+    translations_all: dict[str, list[str]] = {}  # every translation per language, in TMDB's order, untitled ones too
     for t in (d.get("translations") or {}).get("translations") or []:
         data = t.get("data") or {}
         title = data.get("title") or data.get("name") or ""
         lang = t.get("iso_639_1") or ""
+        if lang:
+            translations_all.setdefault(lang, []).append(title)
         if lang and title and lang not in translations:
             translations[lang] = title
     alt_titles: dict[str, list[str]] = {}
@@ -299,6 +302,7 @@ def _facts(d: dict, kind: str) -> dict:
         "country_names": [c.get("name") for c in d.get("production_countries") or [] if c.get("name")],
         "language": d.get("original_language") or "",
         "translations": translations,
+        "translations_all": {k: v for k, v in translations_all.items() if len(v) > 1 or not v[0]},
         "alt_titles": alt_titles,
         "release_date": d.get("release_date") or d.get("first_air_date") or "",
         "overview": d.get("overview") or "",

@@ -18,7 +18,7 @@
   var LISTS = ["genres", "keywords", "original_language", "countries", "audio_languages", "subtitle_languages", "quality", "picture"];
   var BOOLS = ["collection", "in_library", "details"];
   var CHOICES = {quality_from: ["name-or-picture", "name", "picture"], second_copy: ["version", "folder"],
-    other_audio_copy: ["folder", "version"], trailers: ["suffix", "folder"]};
+    other_audio_copy: ["folder", "version"], trailers: ["suffix", "folder"], translation_pick: ["first", "last"]};
   var status = document.getElementById("fl-status");
 
   function el(tag, attrs, kids) {

@@ -68,6 +68,13 @@ expression. A version with burnt-in subtitles is labelled by `hardsub_label` wit
 "hardsub" in its name (`720p French Hardsub`); `hardsub_languages` limits which languages are named, and any other
 hardsub is labelled `Hardsub`.
 
+Which title `{Title}` is: `latin_titles` uses the original title when the title is not in Latin letters and the
+original is; `original_title_for_scripts` (a list of `arabic`, `cyrillic`, `greek`, `hebrew`, `cjk`, `devanagari`,
+`thai`) uses the original when the title has letters of one of those scripts and the original has none. When TMDB
+lists several translations for one language, `translation_pick: first` (the default) uses the first with a title,
+and `last` the last one listed; when that one has no title, the next part of the token (`{TranslatedTitle:ja/JP}`:
+the country's alternative title) is tried.
+
 Subtitles that come with a file are named `<name>.<language>[.forced|.sdh].<ext>` (a second one of a language
 `.alt`), with the language from the file name or the text; picture subtitles go to `Other Files` with an `.ignore`
 marker. Folder icons and full details files are hooks that read where the rules filed an item (see
