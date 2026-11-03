@@ -8,7 +8,7 @@ Stages, in this order:
 
 | Stage | Meant for | Shipped hook |
 |---|---|---|
-| `playable` | will the device play it; rewrap or convert if not | `kinoshelf.default_hooks.playable` (reports only, unless `rewrap` / `convert` options are on) |
+| `playable` | will the device play it; rewrap or re-encode if not | `kinoshelf.default_hooks.playable` (Settings > Playback; see [PLAYBACK.md](PLAYBACK.md)) |
 | `subtitles` | fetch subtitles in the language order from Settings | `kinoshelf.default_hooks.subtitles` (subliminal; off by default) |
 | `nfo` | write a details file for the media server | `kinoshelf.default_hooks.nfo`; `kinoshelf.default_hooks.library_nfo` (full NFO with the filing rules' tags; option `dubbed_tag` adds a tag to every copy the rules call dubbed) |
 | `icon` | poster or folder icon | `kinoshelf.default_hooks.poster` (saves `poster.jpg`); `kinoshelf.default_hooks.folder_icon` (Windows folder icon, see [FOLDER-ICONS.md](FOLDER-ICONS.md)) |
@@ -71,7 +71,7 @@ shows as "Still working".
     "facts": {"genres": ["Drama"], "countries": ["JP"], "language": "ja", "translations": {"ja": "..."}, "collection": null},
     "filing": {"folder": "X:\\Movies\\Japanese\\...", "folder_new": true, "stem": "...", "tags": ["720p"]}
   },
-  "settings": {"subtitle_languages": ["fa", "en"], "subtitle_mark_default": true, "device": {}},
+  "settings": {"subtitle_languages": ["fa", "en"], "subtitle_mark_default": true, "device": {}, "playback": {}},
   "options": {}
 }
 ```

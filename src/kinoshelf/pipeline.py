@@ -8,6 +8,7 @@ Folders inside each Inbox:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -486,7 +487,7 @@ class Engine:
                     if not it or it["state"] != "working":
                         return "skipped"
                     if res["status"] in ("done", "skipped"):
-                        it = self._apply_result(it, res)
+                        it = self._apply_result(it, res, stage)
                         state[key] = {"status": res["status"], "message": res.get("message", ""), "at": now}
                         self.db.update_item(item_id, hooks=state)
                         continue
@@ -508,7 +509,7 @@ class Engine:
         self.promote(item_id)
         return "ready"
 
-    def _apply_result(self, it: dict, res: dict) -> dict:
+    def _apply_result(self, it: dict, res: dict, stage: str = "") -> dict:
         pm = self.pm()
 
         def cpath(p: str) -> Path:
@@ -518,16 +519,24 @@ class Engine:
                 return Path(p)
 
         fields: dict = {}
+        asides: list[tuple[Path, Path]] = []
         for r in res.get("replaced") or []:
             rp = cpath(r)
             if rp.exists():
                 try:
-                    set_aside(rp, "replaced", pm, self.settings)
+                    asides.append((rp, set_aside(rp, "playback" if stage == "playable" else "replaced", pm,
+                                                 self.settings)))
                 except (OSError, PathError) as e:
                     log.warning("Could not set aside %s: %s", rp, e)
+        nf = None
         if res.get("file"):
             nf = cpath(res["file"])
             if nf.exists() and str(nf) != it["staged"]:
+                if stage == "playable":  # the new file takes the item's own name, with its own extension
+                    want = Path(it["staged"]).with_suffix(nf.suffix)
+                    if want != nf and not want.exists():
+                        move(nf, want)
+                        nf = want
                 fields.update(path=str(nf), staged=str(nf))
                 if it.get("dest"):
                     fields["dest"] = str(pure(it["dest"]).with_suffix(nf.suffix))
@@ -538,9 +547,83 @@ class Engine:
                 sides.append(fp)
         fields["sidecars"] = sides
         if res.get("playable"):
-            fields["playable"] = res["playable"]
+            play = dict(res["playable"])
+            rec = play.get("playback")
+            if stage == "playable" and isinstance(rec, dict):
+                rec = dict(rec)
+                if asides and nf is not None:
+                    orig, aside = asides[0]
+                    rec.update(original=str(orig), original_aside=str(aside), new_file=str(nf),
+                               original_aside_shown=self._shown(aside), new_file_shown=self._shown(nf),
+                               extracted=[str(cpath(f)) for f in res.get("files") or []])
+                play["playback"] = rec
+                self.journal_playback(it, rec)
+            fields["playable"] = play
         self.db.update_item(it["id"], **fields)
         return self.db.item(it["id"])
+
+    # ---------------------------------------------------------------- playback journal and undo
+    def journal_playback(self, it: dict, rec: dict, event: str = "") -> None:
+        """One line per playback step in data/playback/journal.jsonl (what, why, the checks, where the original went)."""
+        d = self.data_dir / "playback"
+        d.mkdir(parents=True, exist_ok=True)
+        line = {"at": time.time(), "item": it["id"], "title": _title(it), "event": event or rec.get("action"),
+                "headline": rec.get("headline"), "why": rec.get("why"), "checks": rec.get("checks"),
+                "size_before": int(rec.get("size_before") or 0), "size_after": int(rec.get("size_after") or 0),
+                "original": rec.get("original"), "original_aside": rec.get("original_aside"),
+                "new_file": rec.get("new_file")}
+        with open(d / "journal.jsonl", "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(line, ensure_ascii=False) + "\n")
+
+    def undo_playback(self, item_id: int) -> dict:
+        """Put an item's original back in place of its rewrapped or re-encoded copy. The copy goes to the set-aside
+        folder (Playback originals, "undone"); nothing is deleted."""
+        with self.lock:
+            it = self.db.item(item_id)
+            if not it:
+                raise ValueError("No such item")
+            play = dict(it.get("playable") or {})
+            rec = dict(play.get("playback") or {})
+            if rec.get("action") not in ("rewrapped", "reencoded") or not rec.get("original_aside"):
+                raise ValueError("Nothing to put back for this item")
+            if rec.get("undone"):
+                raise ValueError("The original is already back")
+            orig_aside = Path(rec["original_aside"])
+            if not orig_aside.exists():
+                raise ValueError(f"The original is no longer in the set-aside folder ({rec.get('original_aside_shown')})")
+            current = Path(it["path"])
+            back = current.with_suffix(Path(rec.get("original") or orig_aside).suffix)
+            if back.exists() and back != current:
+                raise ValueError(f"A file is already at {self._shown(back)}")
+            new_aside = None
+            if current.exists():
+                new_aside = set_aside(current, "playback", self.pm(), self.settings)
+            move(orig_aside, back)
+            fields: dict = {"path": str(back)}
+            if it["state"] in ("working", "ready", "review", "kept"):
+                fields["staged"] = str(back)
+            if it["state"] == "moved":
+                fields["moved_to"] = str(back)
+            if it.get("dest"):
+                fields["dest"] = str(pure(it["dest"]).with_suffix(back.suffix))
+            rec.update(undone=True, undone_at=time.time(), copy_aside=str(new_aside) if new_aside else "",
+                       copy_aside_shown=self._shown(new_aside) if new_aside else "")
+            play.update(status=rec.get("status_before") or ("rewrap" if rec["action"] == "rewrapped" else "convert"),
+                        text="Original put back: " + (rec.get("headline") or "").split(":")[0].lower(),
+                        playback=rec)
+            fields["playable"] = play
+            self.db.update_item(item_id, **fields)
+            self.journal_playback(it, rec, "undone")
+            self.db.event("undo", _title(it), "Playback step undone: the original is back", self._shown(back),
+                          item_id=item_id)
+        if it["state"] == "moved":
+            jf = self.identifier.sources.get("jellyfin")
+            if jf is not None and jf.enabled():
+                try:
+                    jf.refresh_paths([self._shown(back.parent)])
+                except LookupError_ as e:
+                    log.warning("Jellyfin refresh failed: %s", e)
+        return {"ok": True, "path": self._shown(back), "copy_aside": rec.get("copy_aside_shown")}
 
     def promote(self, item_id: int) -> None:
         """_Working -> _Ready, same names."""

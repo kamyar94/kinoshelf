@@ -117,7 +117,7 @@
       return body;
     }
     form.querySelectorAll("input, select, textarea").forEach(function (el) {
-      if (!el.name) { return; }
+      if (!el.name || (el.type === "radio" && !el.checked)) { return; }
       var v = el.type === "checkbox" ? el.checked : el.value;
       if (form.hasAttribute("data-nested") && el.name.indexOf(".") > 0) {
         var p = el.name.split(".");
@@ -129,6 +129,28 @@
     });
     return body;
   }
+  // Settings > Playback: a device profile fills the lists; Custom makes them editable.
+  var profData = document.getElementById("device-profiles");
+  if (profData) {
+    var profiles = JSON.parse(profData.textContent);
+    var devForm = document.querySelector('form[data-section="device"]');
+    devForm.querySelectorAll('input[name="profile"]').forEach(function (radio) {
+      radio.addEventListener("change", function () {
+        var p = profiles.filter(function (x) { return x.key === radio.value; })[0] || {};
+        var custom = radio.value === "custom";
+        devForm.querySelectorAll("[data-dev-list]").forEach(function (el) {
+          if (!custom && p[el.name] !== undefined) {
+            if (el.type === "checkbox") { el.checked = !!p[el.name]; } else { el.value = Array.isArray(p[el.name]) ? p[el.name].join(", ") : p[el.name]; }
+          }
+          if (el.type === "checkbox") { el.disabled = !custom; } else { el.readOnly = !custom; }
+        });
+        document.getElementById("dev-note").textContent = custom
+          ? "Type the lists your device's manual gives, as ffprobe names them (h264, hevc, aac, ac3 ...)."
+          : "A starting point. Choose Custom to change the lists; the names are the ones ffprobe uses.";
+      });
+    });
+  }
+
   document.querySelectorAll("form[data-section]:not([data-net])").forEach(function (form) {
     var timer = null;
     var out = form.querySelector(".status");

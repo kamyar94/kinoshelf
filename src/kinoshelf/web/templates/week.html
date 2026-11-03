@@ -24,7 +24,20 @@
       <thead><tr><th>Item</th><th>What happened</th><th>Where</th></tr></thead>
       <tbody>
       {% for r in rows %}
-        <tr><td class="strong">{{ r.item }}</td><td class="soft">{{ r.what }}</td><td class="mono small muted wrap">{{ r.where }}</td></tr>
+        <tr><td class="strong">{{ r.item }}</td><td class="soft">{{ r.what }}
+          {% if r.play %}{% set p = r.play %}
+          <details class="play" data-playback>
+            <summary><span class="badge {{ {'ok': 'good', 'warn': 'warn'}.get(p.tone, 'kept') }}">{{ p.result }}</span> {{ p.headline }}</summary>
+            <div class="playbox">
+              {% if p.why %}<p class="small">{{ p.why }}</p>{% endif %}
+              {% if p.facts %}<dl class="facts">{% for f in p.facts %}<div><dt>{{ f[0] }}</dt><dd>{{ f[1] }}</dd></div>{% endfor %}</dl>{% endif %}
+              {% if p.checks %}<ul class="checks" aria-label="Checks">{% for c in p.checks %}<li class="{{ 'ok' if c.ok else 'no' }}"><span class="mark" aria-hidden="true">{{ '✓' if c.ok else '✗' }}</span><span class="vh">{{ 'Passed:' if c.ok else 'Failed:' }}</span> <span>{{ c.text }}</span> <span class="mono small muted">{{ c.detail }}</span></li>{% endfor %}</ul>{% endif %}
+              {% if p.aside and not p.undone %}<p class="small">Original set aside: <span class="mono wrap">{{ p.aside }}</span></p>{% endif %}
+              {% if p.undone %}<p class="small">The original is back; the new file is in <span class="mono wrap">{{ p.copy_aside }}</span>.</p>{% endif %}
+              {% if p.can_undo %}<button type="button" class="btn small" data-post="/api/items/{{ p.id }}/playback/undo" data-confirm="Put the original back, and set the new file aside?" data-reload>Put the original back</button>{% endif %}
+            </div>
+          </details>
+          {% endif %}</td><td class="mono small muted wrap">{{ r.where }}</td></tr>
       {% else %}
         <tr><td colspan="3" class="muted">Nothing here this week.</td></tr>
       {% endfor %}

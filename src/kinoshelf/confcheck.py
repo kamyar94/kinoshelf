@@ -42,9 +42,14 @@ def problems(text: str) -> list[str]:
     net = values.get("network") or {}
     if net.get("mode", "direct") not in ("direct", "proxy", "route"):
         out.append(f"The network route {net.get('mode')} is not in this version")
-    from . import filing
+    from . import filing, playback
 
     out += filing.validate(values.get("filing") or {})
+    prof = str((values.get("device") or {}).get("profile") or "custom")
+    if prof != "custom" and prof not in playback.PROFILES:
+        out.append(f"The device profile {prof} is not in this version")
+    out += [f"The playback setting {k} is not in this version" for k in (raw.get("playback") or {})
+            if k not in playback.DEFAULTS]
     upd = values.get("update") or {}
     if upd.get("channel", "latest") not in ("latest", "stable"):
         out.append(f"The update channel {upd.get('channel')} is not in this version")

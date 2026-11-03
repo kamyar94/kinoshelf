@@ -200,6 +200,31 @@ legend { padding: 0 6px; font-weight: 600; color: var(--soft); }
 .fl-dest { flex: 2 1 360px; min-width: 0; color: var(--good-text); overflow-wrap: anywhere; }
 @media (max-width: 760px) { .fl-cond { grid-template-columns: 1fr 1fr; } .fl-cond input { grid-column: 1 / -1; } }
 
+/* Settings > Playback and the week page's playback details */
+form.stack { display: flex; flex-direction: column; gap: 10px; }
+form.pbgrid { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+form.pbgrid > fieldset { flex: 1 1 420px; }
+form.pbgrid > .status { flex-basis: 100%; }
+fieldset.block .grid3 { grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr)); }
+fieldset.block { display: flex; flex-direction: column; gap: 10px; align-items: stretch; min-width: 0; }
+fieldset.block p { margin: 0; }
+.profiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); }
+.pcard { position: relative; gap: 4px; padding: 10px 14px; border-radius: 10px; border: 2px solid var(--line); background: var(--ground); color: var(--text); cursor: pointer; min-height: 72px; justify-content: center; }
+.pcard input { position: absolute; opacity: 0; width: 1px; height: 1px; min-height: 0; margin: 0; }
+.pcard:has(input:checked) { border-color: var(--amber); background: var(--raised); }
+.pcard:has(input:focus-visible) { outline: 2px solid var(--amber); outline-offset: 2px; }
+input[readonly] { color: var(--muted); }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+details.play { margin-top: 6px; }
+details.play summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--text); min-height: 32px; }
+.playbox { display: flex; flex-direction: column; gap: 10px; padding: 10px 0 4px; color: var(--soft); }
+.playbox p { margin: 0; }
+ul.checks { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+ul.checks li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 8px 12px; border-top: 1px solid #2A2F35; color: var(--text); }
+ul.checks li:first-child { border-top: 0; }
+ul.checks .mark { flex: none; width: 18px; text-align: center; font-weight: 700; color: var(--good); }
+ul.checks li.no .mark { color: var(--warn-text); }
+
 /* settings: updates */
 .upd { gap: 16px; }
 .upd-top { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); }

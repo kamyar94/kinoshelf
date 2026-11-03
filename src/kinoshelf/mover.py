@@ -201,11 +201,14 @@ def undo(engine: Engine, run_id: str) -> dict:
     return {"done": done, "failed": failed}
 
 
-def _what(it: dict) -> str:
-    """One line for the week page: how the file will play, and whether subtitles came with it."""
+def _what(it: dict, with_play: bool = True) -> str:
+    """One line for the week page: how the file will play, and whether subtitles came with it (with_play=False
+    leaves the playback step out, for a row that shows it in its own details)."""
     play = it.get("playable") or {}
     text = play.get("text") or ""
-    if text.startswith(("Rewrapped", "Converted")):
+    if not with_play:
+        bits = ""
+    elif text.startswith(("Rewrapped", "Converted", "Re-encoded", "Kept the original", "Original put back")):
         bits = text
     else:
         bits = {"ok": "Plays as it is", "rewrap": "Needs a rewrap to play on the device",
@@ -213,4 +216,4 @@ def _what(it: dict) -> str:
     subs = [Path(s).suffixes for s in it.get("sidecars") or [] if Path(s).suffix.lower() in (".srt", ".ass", ".sub")]
     if subs:
         bits += (" · " if bits else "") + "subtitles"
-    return bits or "Moved"
+    return bits or ("Moved" if with_play else "")

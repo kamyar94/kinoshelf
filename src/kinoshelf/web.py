@@ -28,7 +28,7 @@ from .naming import TOKENS, TemplateError, fields_for, render
 from .net import DEFAULT_USE, SOURCE_NAMES, SOURCES, check_address, parse_proxy_url
 from .paths import PathError, PathMap, pure
 from .pipeline import Engine
-from . import filing, updater
+from . import filing, playback, updater
 from .worker import Worker
 
 log = logging.getLogger(__name__)
@@ -36,8 +36,8 @@ HERE = Path(__file__).parent / "web"
 COOKIE = "ks_session"
 POSTER_HOSTS = {"image.tmdb.org", "static.tvmaze.com", "m.media-amazon.com", "ia.media-imdb.com"}
 DEFAULT_PROXY = DEFAULTS["network"]["proxy"]
-SECTIONS = ["paths", "naming", "rule", "schedule", "subtitles", "sources", "network", "device", "hooks", "junk",
-            "server", "watcher", "update"]
+SECTIONS = ["paths", "naming", "rule", "schedule", "subtitles", "sources", "network", "device", "playback", "hooks",
+            "junk", "server", "watcher", "update"]
 
 
 class App:
@@ -206,6 +206,13 @@ def create_app(core: App | None = None) -> FastAPI:
         return JSONResponse({"error": err} if err else {"next": _next_url(core, item_id)},
                             status_code=400 if err else 200)
 
+    @app.post("/api/items/{item_id}/playback/undo")
+    def playback_undo(item_id: int):
+        try:
+            return core.engine.undo_playback(item_id)
+        except (ValueError, OSError, PathError) as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+
     @app.get("/api/items/{item_id}/search", response_class=HTMLResponse)
     def search(item_id: int, request: Request, q: str = "", source: str = "all"):
         if not q.strip():
@@ -257,9 +264,11 @@ def create_app(core: App | None = None) -> FastAPI:
         will = "would move" if core.settings.get("rule.dry_run", True) else "moves"
         panels = {
             "moved": ("Moved into the library this week, and ready to move",
-                      [{"item": _label(it), "what": _what(it), "where": it.get("dest") or ""} for it in moved]
-                      + [{"item": _label(it), "what": f"Ready · {will} {when} · {_what(it)}",
-                          "where": it.get("dest") or ""} for it in ready]),
+                      [{"item": _label(it), "what": _what(it, not _play_view(it)) or "Moved", "where": it.get("dest") or "",
+                        "play": _play_view(it)} for it in moved]
+                      + [{"item": _label(it), "what": " · ".join(x for x in (f"Ready · {will} {when}",
+                                                                            _what(it, not _play_view(it))) if x),
+                          "where": it.get("dest") or "", "play": _play_view(it)} for it in ready]),
             "unsure": ("Waiting for you",
                        [{"item": _label(it), "what": it.get("reason") or "", "where": core.engine._shown(it["path"])}
                         for it in core.db.items(["review", "kept"])]),
@@ -310,6 +319,8 @@ def create_app(core: App | None = None) -> FastAPI:
         imdb = next((x for x in core.engine.identifier.sources["titles"] if x.key == "imdb"), None)
         return page(request, "settings.html", s=s, keys=_key_state(s), tokens=TOKENS, days=DAYS,
                     hooks_yaml=yaml.safe_dump(s.get("hooks", {}), allow_unicode=True, sort_keys=False),
+                    profiles=_profiles(), dev=playback.device_profile(s.get("device")),
+                    pb=playback.options(s.get("playback")), x264_presets=X264_PRESETS,
                     imdb=_try_status(imdb), preview=_previews(core), net=_net_view(s),
                     upd=updater.view(core.data_dir, core.settings))
 
@@ -469,6 +480,39 @@ def _label(it: dict) -> str:
     return _title(it)
 
 
+def _profiles() -> list[dict]:
+    """The device presets for Settings > Playback, with a one-line summary each."""
+    out = []
+    for key, p in playback.PROFILES.items():
+        sub = (f"{', '.join(c.upper() for c in p['containers'][:3])} · "
+               f"{', '.join(_CODEC_NAMES.get(v, v) for v in p['video_codecs'])} · up to {p['max_height']}p")
+        out.append({"key": key, "label": p["label"], "sub": sub, **{k: p[k] for k in playback.LIST_KEYS},
+                    "max_height": p["max_height"], "ten_bit": p["ten_bit"]})
+    out.append({"key": "custom", "label": "Custom", "sub": "Your own lists"})
+    return out
+
+
+_CODEC_NAMES = {"h264": "H.264", "hevc": "HEVC", "vp9": "VP9", "av1": "AV1", "mpeg4": "MPEG-4"}
+
+
+def _play_view(it: dict) -> dict | None:
+    """What the playable stage did to an item, for the week page: the headline, why, the checks, where the original
+    went and whether it can be put back."""
+    rec = (it.get("playable") or {}).get("playback") or {}
+    if rec.get("action") not in ("rewrapped", "reencoded", "kept"):
+        return None
+    tone = "ok" if rec["action"] in ("rewrapped", "reencoded") else "warn"
+    result = {"rewrapped": "Rewrapped", "reencoded": "Re-encoded", "kept": "Original kept"}[rec["action"]]
+    if rec.get("undone"):
+        result, tone = "Original put back", "plain"
+    return {"id": it["id"], "headline": rec.get("headline") or "", "why": rec.get("why") or "", "result": result,
+            "tone": tone, "checks": rec.get("checks") or [], "facts": rec.get("facts") or [],
+            "aside": rec.get("original_aside_shown") or "", "copy_aside": rec.get("copy_aside_shown") or "",
+            "undone": bool(rec.get("undone")),
+            "can_undo": rec["action"] in ("rewrapped", "reencoded") and bool(rec.get("original_aside"))
+            and not rec.get("undone")}
+
+
 def _working_text(it: dict) -> str:
     if it["state"] == "settling":
         return "Still arriving (copy in progress)"
@@ -553,10 +597,14 @@ def _extras(core: App, it: dict) -> list[str]:
     if any(h.get("enabled") for h in hooks.get("icon", []) or []):
         out.append("Poster or folder icon made")
     play = (it.get("playable") or {}).get("status")
+    pb = playback.options(core.settings.get("playback"))
+    on = any(h.get("enabled") for h in hooks.get("playable", []) or [])
     if play == "rewrap":
-        out.append("Rewrap for the device" if any(
-            (h.get("options") or {}).get("rewrap") for h in hooks.get("playable", []) or [] if h.get("enabled"))
-            else "Will not play on the device as it is")
+        out.append("Rewrap for the device, checked picture by picture" if on and pb["rewrap"]
+                   else "Will not play on the device as it is")
+    elif play == "convert":
+        out.append("Re-encode for the device, if it passes the quality check" if on and pb["reencode"]
+                   else "Will not play on the device as it is")
     return out
 
 
@@ -687,6 +735,9 @@ def _previews(core: App) -> dict:
     return out
 
 
+X264_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"]
+
+
 def _num(v, lo, hi, name) -> float:
     try:
         x = float(v)
@@ -809,13 +860,39 @@ def _validate(core: App, section: str, body: dict):
             note = "Saved. Lookups go direct until the proxy's address is set."
         return cur, note
     if section == "device":
-        cur.update(name=str(body.get("name", "")).strip() or "TV",
-                   containers=[x.lower() for x in _lines(str(body.get("containers", "")).replace(",", "\n"))],
-                   video_codecs=[x.lower() for x in _lines(str(body.get("video_codecs", "")).replace(",", "\n"))],
-                   audio_codecs=[x.lower() for x in _lines(str(body.get("audio_codecs", "")).replace(",", "\n"))],
-                   max_height=int(_num(body.get("max_height", 2160), 240, 8640, "Largest picture")),
-                   rewrap_to=str(body.get("rewrap_to", "mp4")).strip() or "mp4")
+        prof = str(body.get("profile") or "custom")
+        if prof not in playback.PROFILES and prof != "custom":
+            raise ValueError(f"Unknown device profile {prof}")
+        cur.update(profile=prof, name=str(body.get("name", "")).strip() or "TV",
+                   rewrap_to=(str(body.get("rewrap_to", "mp4")).strip().lower().lstrip(".") or "mp4"))
+        if prof == "custom":
+            cur.update(containers=[x.lower().lstrip(".") for x in _lines(str(body.get("containers", "")).replace(",", "\n"))],
+                       video_codecs=[x.lower() for x in _lines(str(body.get("video_codecs", "")).replace(",", "\n"))],
+                       audio_codecs=[x.lower() for x in _lines(str(body.get("audio_codecs", "")).replace(",", "\n"))],
+                       max_height=int(_num(body.get("max_height", 2160), 240, 8640, "Largest picture")),
+                       ten_bit=bool(body.get("ten_bit", True)))
+        else:
+            pr = playback.PROFILES[prof]
+            cur.update({k: list(pr[k]) for k in playback.LIST_KEYS}, max_height=pr["max_height"], ten_bit=pr["ten_bit"])
         return cur, note
+    if section == "playback":
+        out = playback.options(cur)
+        out.update(rewrap=bool(body.get("rewrap")), reencode=bool(body.get("reencode")))
+        for k, lo, hi, label in (("audio_offset_ms", 1, 500, "Sound offset"),
+                                 ("duration_tolerance_s", 0.01, 5, "Length difference"),
+                                 ("vmaf_mean", 0, 100, "VMAF mean"), ("vmaf_low1", 0, 100, "VMAF 1% low"),
+                                 ("vmaf_min", 0, 100, "Lowest stretch"), ("vmaf_window_s", 0, 3600, "Stretch length"),
+                                 ("crf_start", 0, 51, "Start CRF"), ("crf_min", 0, 51, "Lowest CRF"),
+                                 ("crf_max", 0, 51, "Highest CRF")):
+            if k in body:
+                out[k] = _num(body[k], lo, hi, label)
+        preset = str(body.get("x264_preset", out["x264_preset"]))
+        if preset not in X264_PRESETS:
+            raise ValueError(f"Unknown x264 speed {preset}")
+        out["x264_preset"] = preset
+        if not out["crf_min"] <= out["crf_start"] <= out["crf_max"]:
+            raise ValueError("The start CRF must lie between the lowest and the highest")
+        return out, note
     if section == "hooks":
         data = yaml.safe_load(str(body.get("yaml", ""))) or {}
         if not isinstance(data, dict):

@@ -16,6 +16,7 @@ PICTURES = re.compile(r"\.(png|jpe?g|webp|gif|bmp|tiff?|ico|icns|psd|heic|avif|s
 ALLOWED = {
     "docs/screenshots/review.png", "docs/screenshots/review-phone.png", "docs/screenshots/settings.png",
     "docs/screenshots/updates.png", "docs/screenshots/week.png", "docs/screenshots/filing.png",
+    "docs/screenshots/playback.png", "docs/screenshots/playback-settings.png",
     "src/kinoshelf/web/static/icon.svg",
     # the folder-icon template's four shape layers (no art, no titles)
     "src/kinoshelf/icons/assets/back.png", "src/kinoshelf/icons/assets/front.png",

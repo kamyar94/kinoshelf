@@ -73,6 +73,7 @@ def probe(path: Path, timeout: int = 60) -> dict:
         "width": (video or {}).get("width"),
         "height": (video or {}).get("height"),
         "hdr": (video or {}).get("color_transfer") in ("smpte2084", "arib-std-b67"),
+        "pix_fmt": (video or {}).get("pix_fmt"),
         "audio": [
             {"codec": a.get("codec_name"), "channels": a.get("channels"),
              "language": (a.get("tags") or {}).get("language")}
@@ -141,15 +142,18 @@ def playable(info: dict, device: dict) -> dict:
     v_ok = vc in device.get("video_codecs", [])
     a_ok = not acs or any(a in device.get("audio_codecs", []) for a in acs)
     h_ok = not info.get("height") or info["height"] <= int(device.get("max_height", 99999))
+    pix = str(info.get("pix_fmt") or "")
+    b_ok = device.get("ten_bit", True) or not any(x in pix for x in ("10", "12"))
     c_ok = info.get("container") in device.get("containers", [])
     name = device.get("name") or "the device"
+    v_ok = v_ok and b_ok
     if v_ok and a_ok and h_ok and c_ok:
         return {"status": "ok", "text": f"Plays on {name} as it is"}
     if v_ok and a_ok and h_ok:
         return {"status": "rewrap", "text": f"Plays on {name} after a rewrap"}
     why = []
     if not v_ok:
-        why.append(f"picture {vc}")
+        why.append(f"picture {vc}" + ("" if b_ok else " 10-bit"))
     if not a_ok:
         why.append("sound " + "/".join(a for a in acs if a))
     if not h_ok:

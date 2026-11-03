@@ -71,6 +71,7 @@ def payload(stage: str, item: dict, pm: PathMap, settings, options: dict) -> dic
             "subtitle_languages": settings.get("subtitles.languages", []),
             "subtitle_mark_default": settings.get("subtitles.mark_default", True),
             "device": settings.get("device", {}),
+            "playback": settings.get("playback", {}),
         },
         "options": options or {},
     }

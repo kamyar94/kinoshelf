@@ -11,6 +11,8 @@ from typing import Any
 
 import yaml
 
+from .playback import DEFAULTS as _PLAYBACK_DEFAULTS
+
 log = logging.getLogger(__name__)
 
 VIDEO_EXTS = [
@@ -30,6 +32,7 @@ DEFAULTS: dict[str, Any] = {
             "replaced": "Replaced",
             "moved": "Moved across drives",
             "empty": "Empty folders",
+            "playback": "Playback originals",  # originals a rewrap or re-encode replaced (Settings > Playback)
         },
     },
     "naming": {
@@ -73,20 +76,26 @@ DEFAULTS: dict[str, Any] = {
             ["aa", "a"], ["ey\\b", "e"], ["iye\\b", "ie"], ["-?ye\\b", "e"], ["w", "v"],
         ],
     },
+    # The device you watch on (Settings > Playback): a profile from playback.PROFILES, or "custom" with your own
+    # lists (names as ffprobe uses them).
     "device": {
+        "profile": "smart-tv",
         "name": "TV",
-        "containers": ["mp4", "mkv", "m4v", "mov"],
-        "video_codecs": ["h264", "hevc", "mpeg4", "vp9", "av1"],
+        "containers": ["mp4", "mkv", "m4v", "mov", "ts"],
+        "video_codecs": ["h264", "hevc", "vp9"],
         "audio_codecs": ["aac", "ac3", "eac3", "mp3"],
         "max_height": 2160,
+        "ten_bit": True,
         "rewrap_to": "mp4",
     },
+    # What the playable stage does for a file the device would not play (docs/PLAYBACK.md).
+    "playback": dict(_PLAYBACK_DEFAULTS),
     "hooks": {
         # Each stage runs its hooks in order. kind: command | http | folder.
         "playable": [
             {"name": "Device check", "kind": "command", "enabled": True,
              "command": ["python", "-m", "kinoshelf.default_hooks.playable"],
-             "options": {"rewrap": False, "convert": False}},
+             "options": {}, "timeout_minutes": 1440},
         ],
         "subtitles": [
             {"name": "Subtitles (subliminal)", "kind": "command", "enabled": False,
@@ -205,11 +214,38 @@ class Settings:
 
 
 def migrate(values: dict, raw: dict) -> bool:
-    """Bring settings written by an older version up to date. True when something changed.
+    """Bring settings written by an older version up to date. True when something changed."""
+    changed = _migrate_network(values, raw)
+    return _migrate_playback(values, raw) or changed
 
-    0.1.0 kept one proxy URL in network.proxy for every lookup and Jellyfin. It becomes mode "proxy"
-    with the URL split into kind, address, username and password; Jellyfin now goes direct.
-    """
+
+def _migrate_playback(values: dict, raw: dict) -> bool:
+    """Before 0.4.0 the device had only its own lists (now profile "custom"), and the device-check hook carried
+    rewrap / convert options; they become playback.rewrap / playback.reencode, so nothing changes by itself."""
+    changed = False
+    raw = raw or {}
+    if isinstance(raw.get("device"), dict) and "profile" not in raw["device"]:
+        values["device"]["profile"] = "custom"
+        values["device"].setdefault("ten_bit", True)
+        changed = True
+    hooks = values.get("hooks") or {}
+    for h in hooks.get("playable") or []:
+        opts = h.get("options") if isinstance(h, dict) else None
+        if not isinstance(opts, dict) or not ({"rewrap", "convert"} & set(opts)):
+            continue
+        if "playback" not in raw:
+            values["playback"]["rewrap"] = bool(opts.get("rewrap"))
+            values["playback"]["reencode"] = bool(opts.get("convert"))
+        opts.pop("rewrap", None)
+        opts.pop("convert", None)
+        h.setdefault("timeout_minutes", 1440)
+        changed = True
+    return changed
+
+
+def _migrate_network(values: dict, raw: dict) -> bool:
+    """0.1.0 kept one proxy URL in network.proxy for every lookup and Jellyfin. It becomes mode "proxy"
+    with the URL split into kind, address, username and password; Jellyfin now goes direct."""
     net = values.get("network")
     if not isinstance(net, dict) or not isinstance(net.get("proxy"), str):
         return False

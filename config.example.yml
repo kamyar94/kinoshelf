@@ -44,18 +44,34 @@ network:                         # Settings > Network; see docs/NETWORK.md
   use: {tmdb: true, imdb: true, tvmaze: true, omdb: true, opensubtitles: true, jellyfin: false, updates: true}
   timeout_seconds: 15
 
-device:                          # what the playback device plays without conversion
+device:                          # Settings > Playback; see docs/PLAYBACK.md
+  profile: smart-tv              # universal | smart-tv | smart-tv-older | browser | apple | android | custom
   name: TV
-  containers: [mp4, mkv, m4v, mov]
-  video_codecs: [h264, hevc, mpeg4, vp9, av1]
+  containers: [mp4, mkv, m4v, mov, ts]   # with a profile other than custom, the profile's lists are used
+  video_codecs: [h264, hevc, vp9]
   audio_codecs: [aac, ac3, eac3, mp3]
   max_height: 2160
+  ten_bit: true
   rewrap_to: mp4
+
+playback:                        # what the playable stage does for a file the device would not play
+  rewrap: true                   # a new container, kept only when it loses nothing (checked picture by picture)
+  reencode: false                # x264, kept only when it passes the VMAF gate and comes out smaller
+  audio_offset_ms: 20
+  duration_tolerance_s: 0.1
+  x264_preset: slow
+  crf_start: 20
+  crf_min: 16
+  crf_max: 30
+  vmaf_mean: 93
+  vmaf_low1: 83
+  vmaf_min: 88
+  vmaf_window_s: 60
 
 hooks:                           # see docs/HOOKS.md
   playable:
     - {name: Device check, kind: command, enabled: true,
-       command: [python, -m, kinoshelf.default_hooks.playable], options: {rewrap: false, convert: false}}
+       command: [python, -m, kinoshelf.default_hooks.playable], options: {}, timeout_minutes: 1440}
   subtitles:
     - {name: Subtitles (subliminal), kind: command, enabled: false,
        command: [python, -m, kinoshelf.default_hooks.subtitles], options: {}}

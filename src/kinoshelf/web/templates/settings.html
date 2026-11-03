@@ -223,19 +223,60 @@
   <p class="status small" role="status"></p>
 </form>
 
-<form class="panel" data-section="device" aria-labelledby="h-device">
-  <h2 class="h3" id="h-device">Playback device</h2>
-  <p class="soft small">What the device plays without conversion. Names as ffprobe reports them.</p>
-  <div class="grid3">
-    <label>Name <input name="name" value="{{ s.device.name }}"></label>
-    <label>Containers <input name="containers" value="{{ s.device.containers|join(', ') }}" class="mono"></label>
-    <label>Picture codecs <input name="video_codecs" value="{{ s.device.video_codecs|join(', ') }}" class="mono"></label>
-    <label>Sound codecs <input name="audio_codecs" value="{{ s.device.audio_codecs|join(', ') }}" class="mono"></label>
-    <label>Largest picture height <input name="max_height" type="number" value="{{ s.device.max_height }}"></label>
-    <label>Rewrap into <input name="rewrap_to" value="{{ s.device.rewrap_to }}" class="mono short"></label>
-  </div>
-  <p class="status small" role="status"></p>
-</form>
+<section class="panel" id="playback" aria-labelledby="h-device">
+  <h2 class="h3" id="h-device">Make it play on my device</h2>
+  <p class="soft small">Every new file is checked against the device you watch on. A file the device would not play gets a rewrap when that loses nothing, or, if you allow it, a re-encode that must pass a quality check and come out smaller. The original is never deleted: it goes to the set-aside folder on the same drive, and each item can be put back from the week page. Details in docs/PLAYBACK.md.</p>
+  <script type="application/json" id="device-profiles">{{ profiles|tojson }}</script>
+  <form data-section="device" class="stack">
+    <fieldset class="block">
+      <legend>Device</legend>
+      <div class="profiles" role="radiogroup" aria-label="Device profile">
+        {% for p in profiles %}
+        <label class="pcard"><input type="radio" name="profile" value="{{ p.key }}" {% if dev.profile == p.key %}checked{% endif %}>
+          <span class="strong">{{ p.label }}</span><span class="small soft">{{ p.sub }}</span></label>
+        {% endfor %}
+      </div>
+      <div class="grid3">
+        <label>Name <input name="name" value="{{ s.device.name }}"></label>
+        <label>Containers <input name="containers" value="{{ dev.containers|join(', ') }}" class="mono" data-dev-list {% if dev.profile != 'custom' %}readonly{% endif %}></label>
+        <label>Picture codecs <input name="video_codecs" value="{{ dev.video_codecs|join(', ') }}" class="mono" data-dev-list {% if dev.profile != 'custom' %}readonly{% endif %}></label>
+        <label>Sound codecs <input name="audio_codecs" value="{{ dev.audio_codecs|join(', ') }}" class="mono" data-dev-list {% if dev.profile != 'custom' %}readonly{% endif %}></label>
+        <label>Largest picture height <input name="max_height" type="number" value="{{ dev.max_height }}" data-dev-list {% if dev.profile != 'custom' %}readonly{% endif %}></label>
+        <label>Rewrap into <input name="rewrap_to" value="{{ dev.rewrap_to }}" class="mono short"></label>
+        <label class="check"><input type="checkbox" name="ten_bit" data-dev-list {% if dev.ten_bit %}checked{% endif %} {% if dev.profile != 'custom' %}disabled{% endif %}> Plays 10-bit pictures</label>
+      </div>
+      <p class="small muted" id="dev-note">{% if dev.profile == 'custom' %}Type the lists your device's manual gives, as ffprobe names them (h264, hevc, aac, ac3 ...).{% else %}A starting point. Choose Custom to change the lists; the names are the ones ffprobe uses.{% endif %}</p>
+    </fieldset>
+    <p class="status small" role="status"></p>
+  </form>
+  <form data-section="playback" class="pbgrid">
+    <fieldset class="block">
+      <legend>Rewrap: a new container, nothing re-encoded</legend>
+      <label class="check"><input type="checkbox" name="rewrap" {% if pb.rewrap %}checked{% endif %}> Rewrap a file the device cannot open</label>
+      <p class="small soft">The new file is kept only when every picture decodes to the same image (a hash per picture, the same count), the sound decodes the same or, where a track had to become AAC, stays in step within the offset below, the lengths match, and the streams, languages and picture size are unchanged.</p>
+      <div class="grid3">
+        <label>Sound may shift by at most (ms) <input name="audio_offset_ms" type="number" min="1" max="500" value="{{ pb.audio_offset_ms }}"></label>
+        <label>Lengths may differ by (s) <input name="duration_tolerance_s" type="number" min="0.01" max="5" step="0.01" value="{{ pb.duration_tolerance_s }}"></label>
+      </div>
+    </fieldset>
+    <fieldset class="block">
+      <legend>Re-encode: when a rewrap cannot help</legend>
+      <label class="check"><input type="checkbox" name="reencode" {% if pb.reencode %}checked{% endif %}> Re-encode a picture the device cannot play</label>
+      <p class="small soft">H.264 with x264. The quality is measured with VMAF against the original, picture by picture. A copy that misses the gate, or that would not be smaller than the original, is thrown away and the original stays. Never larger than the original: always on.</p>
+      <div class="grid3">
+        <label>VMAF mean at least <input name="vmaf_mean" type="number" min="0" max="100" step="0.5" value="{{ pb.vmaf_mean }}"></label>
+        <label>VMAF 1% low at least <input name="vmaf_low1" type="number" min="0" max="100" step="0.5" value="{{ pb.vmaf_low1 }}"></label>
+        <label>Lowest stretch at least <input name="vmaf_min" type="number" min="0" max="100" step="0.5" value="{{ pb.vmaf_min }}"></label>
+        <label>Stretch length (s, 0 = one picture) <input name="vmaf_window_s" type="number" min="0" max="3600" value="{{ pb.vmaf_window_s }}"></label>
+        <label>x264 speed <select name="x264_preset">{% for x in x264_presets %}<option {% if pb.x264_preset == x %}selected{% endif %}>{{ x }}</option>{% endfor %}</select></label>
+        <label>Start at CRF <input name="crf_start" type="number" min="0" max="51" value="{{ pb.crf_start }}"></label>
+        <label>Lowest CRF <input name="crf_min" type="number" min="0" max="51" value="{{ pb.crf_min }}"></label>
+        <label>Highest CRF <input name="crf_max" type="number" min="0" max="51" value="{{ pb.crf_max }}"></label>
+      </div>
+    </fieldset>
+    <p class="status small" role="status"></p>
+  </form>
+</section>
 
 <form class="panel" data-section="hooks" aria-labelledby="h-hooks">
   <h2 class="h3" id="h-hooks">Hooks</h2>
