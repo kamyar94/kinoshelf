@@ -24,8 +24,8 @@ run's summary lists its digest and the command to check its signature.
 Every few hours (Settings > Updates > Check every), or when you press a button, it asks the registry which image
 the channel's tag points at. When that image is newer than the running one, it downloads it by digest and checks
 every part against its digest while it downloads: a part that does not match throws the whole download away.
-With `update.verify: cosign` in `data/config.yml` it also checks the signature (this needs the `cosign` program
-for the updater and Sigstore's servers to be reachable). It then leaves a `docker load` archive in
+With `update.verify: cosign` in `data/config.yml` it also checks the signature (see "Signature checks" below). It
+then leaves a `docker load` archive in
 `data/update/incoming/` and a short note, `data/update/ready.env`. The updater has no Docker access: it cannot
 start, stop or change any container. A check that fails (the registry or the proxy cannot be reached) is tried
 again after 12 minutes, then 24, 48 and so on, never later than the regular interval; Settings > Updates says
@@ -103,6 +103,24 @@ network it shares with the app does not answer the updater on another network: l
 the container's addresses (`0.0.0.0`; with no port published, nothing outside Docker can reach it) and keep
 deciding by source address in its routing rules, or give the updater an inbound of its own. Settings > Updates >
 **Check now** shows "registry reached through the proxy" when the way works.
+
+## Signature checks
+
+Every image is signed in the build. To have the updater check that signature before it fetches anything:
+
+1. Download `cosign-linux-amd64` (or `-arm64`) and `cosign_checksums.txt` of one release from
+   https://github.com/sigstore/cosign/releases (v3.1.4 was tested), check the file against the list
+   (`sha256sum -c --ignore-missing cosign_checksums.txt`), and keep it as `tools/cosign` beside `docker-compose.yml`
+   (`chmod 755`).
+2. Add `compose.cosign.example.yml` (copied to `compose.cosign.yml`) to `COMPOSE_FILE` in `.env`. It mounts the
+   program read-only into the updater only; the app image does not grow.
+3. Set `update.verify: cosign` in `data/config.yml` and restart the updater.
+
+The updater then runs `cosign verify` on the image's digest, requiring a certificate issued to this repository's
+build workflow by GitHub. On the way it reaches `ghcr.io`, `pkg-containers.githubusercontent.com` and
+`tuf-repo-cdn.sigstore.dev` (allow `rekor.sigstore.dev` too), through the same route as the registry. When the
+program is missing, the check cannot finish within 5 minutes, or the signature does not check out, the update is
+refused and Settings > Updates says why; it never falls back to the digest check alone.
 
 ## Turning it off, and updating by hand
 

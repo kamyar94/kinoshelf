@@ -160,13 +160,28 @@ def cosign_verify(ref: str, identity: str, env: dict, run: Callable = subprocess
     """'' when the signature checks out, else why not. Needs the cosign program and Sigstore reachable."""
     exe = shutil.which("cosign")
     if not exe:
-        return "Signature check is on, but cosign is not installed for the updater"
+        return "Signature check is on, but cosign is not installed for the updater; nothing fetched"
     try:
         p = run([exe, "verify", ref, "--certificate-oidc-issuer", "https://token.actions.githubusercontent.com",
                  "--certificate-identity-regexp", identity], capture_output=True, text=True, timeout=300, env=env)
     except (OSError, subprocess.TimeoutExpired):
-        return "The signature check did not finish"
-    return "" if p.returncode == 0 else "The image's signature did not check out"
+        return "The signature check did not finish within 5 minutes; nothing fetched"
+    if p.returncode == 0:
+        return ""
+    return "The image's signature did not check out; nothing fetched: " + _cosign_reason(p.stderr, env)
+
+
+def _cosign_reason(stderr: str | None, env: dict) -> str:
+    """cosign's own last error line, without the proxy's address (a secret on the page) and cut short."""
+    lines = [x.strip() for x in (stderr or "").splitlines() if x.strip()]
+    text = re.sub(r"^Error:\s*", "", lines[-1]) if lines else "cosign gave no reason"
+    proxy = str(env.get("HTTPS_PROXY") or env.get("https_proxy") or "")
+    if proxy:
+        host = re.sub(r"^[a-zA-Z0-9]+://", "", proxy).split("@")[-1].rstrip("/")
+        for secret in (proxy, host, host.split(":")[0]):
+            if secret:
+                text = text.replace(secret, "the proxy")
+    return re.sub(r"[^\x20-\x7e]", "", text)[:200]
 
 
 def _safe(v: str) -> str:

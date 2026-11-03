@@ -226,8 +226,9 @@ Updates), downloads it by digest and checks every part. A host step run by a tim
 the running image as the previous one, restarts, makes sure
 the app answers with the new version, and goes back to the previous image and settings when it does
 not. Every update is written to `data/update/journal.jsonl` and shown in Settings. No container gets the
-Docker socket. Off by one switch; details, the security reasoning and the host step for Linux, WSL and
-Docker Desktop in [docs/UPDATES.md](docs/UPDATES.md).
+Docker socket. With a cosign program mounted into the updater (`compose.cosign.example.yml`) it also checks each
+image's signature and refuses an update it cannot check. Off by one switch; details, the security reasoning and the
+host step for Linux, WSL and Docker Desktop in [docs/UPDATES.md](docs/UPDATES.md).
 
 ## Hooks
 

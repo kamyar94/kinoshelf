@@ -293,6 +293,31 @@ def test_cosign_mode_needs_a_good_signature(agent_env):
     assert agent.run_once()["state"] == "ready" and seen["ref"].endswith("@" + fr.tags["latest"])
 
 
+def test_cosign_refusals_say_why_without_the_proxy(monkeypatch):
+    import subprocess as sp
+
+    from kinoshelf.updater import cosign_verify
+
+    env = {"HTTPS_PROXY": "http://user:pw@proxy.example.invalid:3128"}
+    monkeypatch.setattr(updater.shutil, "which", lambda name: None)
+    assert "cosign is not installed" in cosign_verify("img@sha256:1", "id", env)  # never a quiet fall-back
+    monkeypatch.setattr(updater.shutil, "which", lambda name: "/usr/local/bin/cosign")
+
+    class P:
+        returncode = 1
+        stderr = ("Error: getting signatures: Get \"https://ghcr.io/v2/\": proxyconnect tcp: dial tcp "
+                  "proxy.example.invalid:3128: connect: connection refused\n")
+
+    why = cosign_verify("img@sha256:1", "id", env, run=lambda *a, **k: P())
+    assert why.startswith("The image's signature did not check out; nothing fetched: getting signatures")
+    assert "proxy.example.invalid" not in why and "pw" not in why and "the proxy" in why
+
+    def slow(*a, **k):
+        raise sp.TimeoutExpired("cosign", 300)
+
+    assert "did not finish" in cosign_verify("img@sha256:1", "id", env, run=slow)
+
+
 # ---------------------------------------------------------------------- the host step (fake docker)
 FAKE_DOCKER = r'''#!/bin/sh
 S="$FAKE_STATE"

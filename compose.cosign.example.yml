@@ -1,0 +1,9 @@
+# Signature checks for updates (docs/UPDATES.md, "Signature checks"). Copy to compose.cosign.yml, add it to
+# COMPOSE_FILE in .env, and set update.verify: cosign in data/config.yml.
+#
+# The cosign program comes from a release on https://github.com/sigstore/cosign/releases, checked against that
+# release's cosign_checksums.txt, and kept as ./tools/cosign (chmod 755). Only the updater gets it, read-only.
+services:
+  updater:
+    volumes:
+      - ./tools/cosign:/usr/local/bin/cosign:ro
