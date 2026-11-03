@@ -217,6 +217,8 @@ def test_agent_fetches_a_newer_image_once(agent_env):
 def test_after_the_host_step_the_panel_says_what_runs(agent_env, monkeypatch):
     agent, s, fr, clock, d = agent_env
     assert agent.run_once()["state"] == "ready"
+    updater.request(d.parent, "check")
+    assert "waiting for the host step" in agent.run_once()["message"]
     for f in ("ready.json", "ready.env"):  # the host step installed it and cleaned up
         (d / f).unlink()
     monkeypatch.setenv("KS_REVISION", "bbbbbbb")  # the new image runs

@@ -193,12 +193,14 @@ class Agent:
         req_file.unlink(missing_ok=True)
         current = current_image(d)
         st.update(heartbeat=now, current=current, enabled=bool(cfg.get("enabled", True)))
-        if st.get("state") in ("ready", "fetching") and not (d / "ready.json").exists():
-            # The host step installed (or refused) what was fetched: say what runs now, not "Update ready".
+        if not (d / "ready.json").exists():
+            # The host step installed (or refused) what was fetched: say what runs now, not "Update ready" or
+            # "waiting for the host step".
             latest = st.get("latest") or {}
-            same = latest.get("revision") and latest.get("revision") == current.get("revision")
-            st.update(state="idle", message="Up to date" if same else "The fetched image was not installed; "
-                      "see the history")
+            if latest.get("revision") and latest.get("revision") == current.get("revision"):
+                st.update(state="idle", message="Up to date")
+            elif st.get("state") in ("ready", "fetching"):
+                st.update(state="idle", message="The fetched image was not installed; see the history")
         last = st.get("last_check") or {}
         failures = int(st.get("failures") or 0) if last and not last.get("ok") else 0
         if not due(cfg, last.get("at", 0), now, requested, failures):
