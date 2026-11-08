@@ -25,6 +25,7 @@ def _minutes(value: Any) -> float | None:
 class TvmazeSource(Source):
     key = "tvmaze"
     name = "TVmaze"
+    kinds = ("series",)  # it knows no films, so it says nothing about one
 
     def _get(self, path: str, **params: Any) -> Any:
         return self.net.get_json(BASE + path, params or None, {"Accept": "application/json"})

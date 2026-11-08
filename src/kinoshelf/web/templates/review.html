@@ -58,7 +58,8 @@
     <section class="matches" aria-label="Matches">
       <div class="row between baseline">
         <h2 class="h2">Which one is it?</h2>
-        <span class="muted small">{{ cur.hash }}</span>
+        <span class="row wrap-gap"><span class="muted small">{{ cur.hash }}</span>
+          <button type="button" class="btn small" data-act="lookup" title="Ask every lookup source again from the start">Look up again</button></span>
       </div>
       <div id="cards">{% include "_cards.html" %}</div>
       <form class="panel search" id="search" data-plain>

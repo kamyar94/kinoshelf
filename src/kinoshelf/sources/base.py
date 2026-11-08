@@ -18,6 +18,15 @@ class Source:
     key = ""  # settings key, e.g. "tmdb"
     name = ""  # shown on the page, e.g. "TMDB"
     online = True  # False for sources that work without internet (offline IMDb copy)
+    kinds = ("movie", "series")  # what it can identify; an empty answer about anything else says nothing
+
+    def covers(self, kind: str) -> bool:
+        """Whether an answer from this source counts for a file of this kind (movie, episode, unknown)."""
+        if kind == "movie":
+            return "movie" in self.kinds
+        if kind == "episode":
+            return "series" in self.kinds
+        return True
 
     def __init__(self, cfg: dict, net: Net, data_dir: Path):
         self.cfg = cfg or {}

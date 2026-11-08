@@ -55,7 +55,8 @@
           body = { index: picked, group: g ? g.checked : false, replace: r ? r.checked : false };
         }
         item.querySelectorAll("[data-act]").forEach(function (x) { x.disabled = true; });
-        say(status, act === "approve" ? "Moving it under its new name…" : "Saving…");
+        say(status, act === "approve" ? "Moving it under its new name…" :
+          act === "lookup" ? "Asking the lookup sources again…" : "Saving…");
         post("/api/items/" + id + "/" + act, body).then(function (j) {
           window.location.href = j.next || "/review";
         }).catch(function (e) {

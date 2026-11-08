@@ -127,19 +127,22 @@ class Identifier:
     def identify(self, q: Query, only: str | None = None, details_top: int = 6) -> tuple[list[Candidate], list[str]]:
         """Scored candidates, best first, plus notes about sources that failed.
 
-        Raises LookupError_ when nothing could be asked at all (every source failed), so the
-        caller retries later instead of treating the file as unknown.
+        Only sources that can identify this kind of file count (TVmaze says nothing about a film). Raises
+        LookupError_ so the caller retries later instead of calling the file unknown: when every source that
+        counts could not be reached, or when nothing matched and some of them could not be reached
+        (partial=True: the others answered with nothing).
         """
         notes: list[str] = []
         found: list[tuple] = []  # (source, candidate)
-        asked = failed = 0
+        asked = failed = 0  # sources that count for this kind of file
         by_id = bool(q.imdb_id or q.tmdb_id or q.tvmaze_id)
         for src in self.title_sources(only):
-            asked += 1
+            counts = by_id or getattr(src, "covers", lambda k: True)(q.kind)
+            asked += counts
             try:
                 res = src.by_id(q) if by_id else src.search(q)
             except LookupError_ as e:
-                failed += 1
+                failed += counts
                 notes.append(f"{src.name} could not be reached ({e})")
                 continue
             found += [(src, c) for c in res]
@@ -203,6 +206,9 @@ class Identifier:
                 except LookupError_ as e:
                     notes.append(f"Jellyfin: {e}")
                     break
+        if not merged and failed:
+            # "Asked and found nothing" is not known while a source that counts could not be asked.
+            raise LookupError_("; ".join(sorted(set(notes))), partial=True)
         scored = score_candidates(merged, q, self.settings.get("scoring", {}), hash_checked=hash_checked)
         return scored[:8], sorted(set(notes))
 

@@ -35,6 +35,10 @@ log = logging.getLogger(__name__)
 WORKING, READY, REVIEW = "_Working", "_Ready", "_Needs review"
 SPECIAL = {WORKING, READY, REVIEW}
 ACTIVE = ("settling", "queued", "review", "kept", "working", "ready")
+# Nothing matched while a source that counts stayed unreachable: wait this many tries (15 min, 30 min ... 6 h,
+# about 14 hours in all) before the file goes to review anyway. When every source that counts is unreachable it
+# keeps waiting.
+PARTIAL_LOOKUP_TRIES = 6
 
 _LANG_WORDS = {
     "english": "en", "eng": "en", "en": "en", "persian": "fa", "farsi": "fa", "fa": "fa", "per": "fa", "fas": "fa",
@@ -219,14 +223,20 @@ class Engine:
                   episode=parsed.episode, duration_min=(dur / 60 if dur and not it["is_dvd"] else None),
                   oshash=oshash, size=probe.get("size"))
         self.db.update_item(item_id, parsed=parsed.to_dict(), probe=probe, oshash=oshash)
+        unreachable = ""
         try:
             cands, notes = self.identifier.identify(q) if q.title else ([], [])
         except LookupError_ as e:
             tries = (it["tries"] or 0) + 1
-            wait = min(6 * 3600, 900 * 2 ** (tries - 1))
-            self.db.update_item(item_id, tries=tries, retry_at=time.time() + wait, notes=[str(e)],
-                                reason="Lookups could not be reached; trying again later")
-            return
+            if not (e.partial and tries > PARTIAL_LOOKUP_TRIES):
+                # The file stays where it is (the Inbox, or _Needs review after Look up again).
+                wait = min(6 * 3600, 900 * 2 ** (tries - 1))
+                self.db.update_item(item_id, tries=tries, retry_at=time.time() + wait, notes=[str(e)],
+                                    reason="Lookups could not be reached; trying again later")
+                return
+            # Other sources kept answering "nothing" while one stayed unreachable: let the user decide.
+            cands, notes = [], [str(e)]
+            unreachable = f"; some lookups could not be reached in {tries - 1} tries"
         rules = self.rules()
         if rules is not None and cands:
             # The rules know the library's folders: a copy of something already there waits for the user.
@@ -251,11 +261,13 @@ class Engine:
                 confident, reason = False, f"Filing rules: {e}"
         if it["is_dvd"]:
             confident, reason = False, "DVD folder: pick the title by hand" if cands else "No name to go on"
+        reason += unreachable
         play = {"status": "dvd", "text": "DVD folder"} if it["is_dvd"] else media.playable(
             probe, self.settings.get("device", {}))
+        sides = [str(s) for s in self.find_sidecars(Path(it["path"]), it)]
+        sides += [s for s in it.get("sidecars") or [] if s not in sides and Path(s).exists()]  # kept from before
         self.db.update_item(item_id, candidates=[c.to_dict() for c in cands], confident=int(confident),
-                            reason=reason, notes=notes, playable=play, tries=0, retry_at=None,
-                            sidecars=[str(s) for s in self.find_sidecars(Path(it["path"]), it)])
+                            reason=reason, notes=notes, playable=play, tries=0, retry_at=None, sidecars=sides)
         if confident:
             self.choose(item_id, cands[0].to_dict(), by="auto")
         else:
@@ -719,6 +731,20 @@ class Engine:
             self.db.update_item(item_id, state="junk")
             self.db.event("junk", Path(it["src_rel"]).name, "Set aside as junk on the review page", place,
                           item_id=item_id)
+        return None
+
+    def lookup_again(self, item_id: int) -> str | None:
+        """Review page > Look up again: the item is identified from scratch on the next pass. Its file stays in
+        _Needs review meanwhile; a confident match moves it on from there, anything else leaves it in place."""
+        with self.lock:
+            it = self.db.item(item_id)
+            if not it or it["state"] not in ("review", "kept"):
+                return "This item is no longer waiting for review"
+            if not Path(it["path"]).exists():
+                return "The file is no longer where Kinoshelf left it"
+            self.db.update_item(item_id, state="queued", tries=0, retry_at=None, candidates=[], confident=0,
+                                chosen_cand=None, notes=[], reason="Looking it up again")
+            self.db.event("lookup", _title(it), "Looked up again from the review page", item_id=item_id)
         return None
 
     def search(self, item_id: int, text: str, only: str | None = None) -> tuple[list[Candidate], list[str]]:

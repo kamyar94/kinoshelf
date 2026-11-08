@@ -206,6 +206,14 @@ def create_app(core: App | None = None) -> FastAPI:
         return JSONResponse({"error": err} if err else {"next": _next_url(core, item_id)},
                             status_code=400 if err else 200)
 
+    @app.post("/api/items/{item_id}/lookup")
+    def lookup_again(item_id: int):
+        err = core.engine.lookup_again(item_id)
+        if not err:
+            core.worker.wake.set()
+        return JSONResponse({"error": err} if err else {"next": _next_url(core, item_id)},
+                            status_code=400 if err else 200)
+
     @app.post("/api/items/{item_id}/playback/undo")
     def playback_undo(item_id: int):
         try:

@@ -16,8 +16,9 @@ A self-hosted inbox for new films and episodes. Drop a video into the Inbox fold
 Whatever it is not sure about waits on a one-screen review page: the file with what was stripped from
 its name, its facts, four still frames, the matches with the checks behind each score, a search box
 that also takes a pasted IMDb or TMDB link, the destination path, and three buttons: **Approve and
-move**, **Not sure, keep in Inbox**, **Junk, set aside**. A second page shows the week, and a third
-edits every setting. The pages work at phone width.
+move**, **Not sure, keep in Inbox**, **Junk, set aside**. **Look up again** asks every source once more
+from the start. A second page shows the week, and a third edits every setting. The pages work at phone
+width.
 
 **It never deletes.** Junk, replaced files and emptied folders go to a set-aside folder on the same
 drive for you to empty. Every move is written to a journal with an undo file.
@@ -128,7 +129,9 @@ Nothing is published by default. Pick one or more in `.env`:
 
 **Filtered or unreliable internet.** A tunnel from a network that filters traffic may be slow, cut,
 or blocked. The app does not depend on it: it keeps working on the host and the LAN, lookups that
-fail are retried later (items show as "Still working"), and the IMDb copy works offline. If the
+fail are retried later (items show as "Still working" and stay where they are), and the IMDb copy works
+offline. A file only goes to review as "Nothing matched" once the sources that can know it were asked
+and answered; a source that knows only series (TVmaze) does not count for a film. If the
 IMDb download is blocked, fetch `title.basics.tsv.gz` and `title.akas.tsv.gz` from
 https://datasets.imdbws.com elsewhere and put them in `data/imdb/`. When lookups themselves are
 blocked, see [Network](#network).

@@ -83,4 +83,11 @@ class HashHit:
 
 
 class LookupError_(Exception):
-    """A source could not be reached or answered with an error. The lookup should be retried later."""
+    """A source could not be reached or answered with an error. The lookup should be retried later.
+
+    partial: some of the sources that matter answered (with nothing), others could not be reached.
+    """
+
+    def __init__(self, *args, partial: bool = False):
+        super().__init__(*args)
+        self.partial = partial
