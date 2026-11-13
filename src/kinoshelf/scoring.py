@@ -71,6 +71,9 @@ def score_candidates(cands: list[Candidate], q: Query, scoring: dict, hash_check
         elif c.year and not q.year:
             num += wy * float(scoring.get("missing_year", 0.7))
             den += wy
+        if c.years:
+            told = ", ".join(f"{s} {y}" for s, y in c.years.items())
+            checks.append({"key": "year_sources", "ok": None, "text": f"Sources disagree on the year ({told}); using {c.year}"})
 
         diff = runtime_diff_pct(q.duration_min, c)
         r = _runtime(c)

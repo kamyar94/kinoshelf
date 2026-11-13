@@ -32,11 +32,11 @@ VIDEO_EXTS = {"mkv", "mp4", "m4v", "avi", "mov", "wmv", "mpg", "mpeg", "ts", "m2
 CONDITIONS = {"type", "genres", "keywords", "original_language", "countries", "audio_languages", "subtitle_languages",
               "dubbed", "collection", "quality", "picture", "year", "runtime", "in_library", "name", "details", "any", "not"}
 RULE_KEYS = {"name", "enabled", "when", "hold", "root", "folder", "file", "show_folder", "season_folder", "episode_file",
-             "tags", "collections", "policies"}
+             "tags", "collections", "directors", "policies"}
 POLICIES = {
-    "quality_from": "name-or-picture",  # name | picture | name-or-picture
+    "quality_from": "picture",  # picture (its real size) | name (the release name's word) | name-or-picture
     "second_copy": "version",  # a copy of a film already filed: version (in its folder) | folder (its own)
-    "other_audio_copy": "folder",  # a copy whose audio differs (dubbed or not): folder | version
+    "other_audio_copy": "version",  # a copy whose audio differs (dubbed or not): version (tagged) | folder
     "version_label": "{Picture}{ |VersionWords}",
     "trailers": "suffix",  # suffix (beside the film) | folder (a Trailers folder in it)
     "trailer_suffix": "-trailer",
@@ -104,6 +104,7 @@ class Filing:
     rule: str = ""
     category: str = ""  # the rule's root, for icons and reports
     collection: dict | None = None  # {"id", "name", "folder", "new", "members"}
+    group: dict | None = None  # a director's folder: {"name", "folder", "new", "members"}
     season_folder: str = ""
     tags: list[str] = field(default_factory=list)
     dubbed: bool = False
@@ -275,11 +276,14 @@ class Item:
     def quality(self) -> str:
         if self.it.get("is_dvd"):
             return "DVD"
-        mode = self.pol.get("quality_from", "name-or-picture")
-        q = quality_from_name(*self.names) if mode in ("name", "name-or-picture") else ""
-        if not q and mode in ("picture", "name-or-picture"):
-            q = picture_class(self.probe.get("width"), self.probe.get("height"))
-        return q
+        mode = self.pol.get("quality_from", "picture")
+        name = quality_from_name(*self.names)
+        if mode == "name":
+            return name
+        picture = picture_class(self.probe.get("width"), self.probe.get("height"))
+        if mode == "picture":
+            return picture or name  # the release name only when the picture size is unknown
+        return name or picture
 
     def translated(self, arg: str) -> str:
         title = self.title()
@@ -399,6 +403,8 @@ def validate(cfg: dict) -> list[str]:
         out += [f"Rule {i}: {e}" for e in _policy_problems(r.get("policies") or {})]
         if not r.get("root") and not r.get("hold") and r.get("enabled", True):
             out.append(f"Rule {i}: no root folder")
+        if r.get("directors") is not None and not isinstance(r.get("directors"), dict):
+            out.append(f"Rule {i}: directors must be a mapping (existing, create)")
     out += [f"Unknown policy {k}" for k in (cfg or {}).get("policies") or {} if k not in POLICIES]
     out += _policy_problems((cfg or {}).get("policies") or {})
     return out
@@ -522,6 +528,14 @@ class Index:
                 return f, n
         return None
 
+    def group(self, name: str, root: str) -> tuple[Folder, int] | None:
+        """A folder of films named after a person (a director's folder) directly under root."""
+        key = norm(safe(name))
+        for f, n in self.collections:
+            if f.root == root and key and norm(f.name) == key:
+                return f, n
+        return None
+
     def show(self, imdb: str | None, titles: list[str], year: int | None) -> Folder | None:
         for s in self.shows:
             if imdb and s.ids.get("imdb") == imdb:
@@ -633,6 +647,19 @@ class Rules:
                 coll = {"id": c["id"], "name": c["name"], "folder": _join(root, safe(c["name"])), "new": True,
                         "members": 0}
                 parent = coll["folder"]
+        group = None
+        dp = {"existing": False, "create": False, **(rule.get("directors") or {})}
+        if coll is None and (dp["existing"] or dp["create"]):
+            directors = x.facts.get("directors") or [p.strip() for p in str(cand.get("people") or "").split(",") if p.strip()]
+            for d in directors if dp["existing"] else []:
+                found = self.index.group(d, root)
+                if found is not None:
+                    group = {"name": d, "folder": found[0].shown, "new": False, "members": found[1]}
+                    break
+            if group is None and dp["create"] and directors:
+                group = {"name": directors[0], "folder": _join(root, safe(directors[0])), "new": True, "members": 0}
+            if group is not None:
+                parent = group["folder"]
         folder = _join(parent, folder_name)
         if role == "trailer":
             stem = folder_name + pol.get("trailer_suffix", "-trailer")
@@ -644,7 +671,8 @@ class Rules:
             stem = safe(render(rule.get("file") or "{Folder}", values))
         dest = _join(folder, "VIDEO_TS") if it.get("is_dvd") else _join(folder, stem + ext)
         f = Filing(kind="movie", dest=dest, folder=folder, folder_new=True, stem=stem, rule=rule.get("name", ""),
-                   category=root, collection=coll, tags=tags, dubbed=dubbed, role="part" if part else role, notes=notes)
+                   category=root, collection=coll, group=group, tags=tags, dubbed=dubbed, role="part" if part else role,
+                   notes=notes)
         if existing and pol.get("hold_copies", True):
             f.hold = "Another copy of this film is already in the library"
         elif role == "trailer":

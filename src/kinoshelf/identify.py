@@ -55,7 +55,21 @@ def _same(a: Candidate, b: Candidate) -> bool:
         bool(a.original_title) and norm(a.original_title) == norm(b.original_title or b.title))
 
 
-def merge(group: list[Candidate]) -> Candidate:
+YEAR_FROM = ("imdb", "tmdb", "file")
+FIRST_RELEASE = "First release"  # TMDB's earliest release date anywhere, the way IMDb dates a film
+
+
+def pick_year(years: dict, year_from: str = "imdb", file_year: int | None = None) -> int | None:
+    """The year to use when sources disagree. imdb: IMDb's (or OMDb's, which is IMDb's data), else the first
+    release anywhere, else TMDB's; tmdb: TMDB's first; file: the file name's year when a source gives it."""
+    if year_from == "file" and file_year and file_year in years.values():
+        return file_year
+    order = (["TMDB", "IMDb", "OMDb", FIRST_RELEASE] if year_from == "tmdb"
+             else ["IMDb", "OMDb", FIRST_RELEASE, "TMDB"]) + PRIORITY
+    return next((years[s] for s in order if years.get(s)), None)
+
+
+def merge(group: list[Candidate], year_from: str = "imdb", file_year: int | None = None) -> Candidate:
     """One candidate from several sources' views of the same title."""
     g = sorted(group, key=lambda c: min((_rank(s) for s in c.sources), default=9))
 
@@ -85,6 +99,17 @@ def merge(group: list[Candidate]) -> Candidate:
     flags = [c.episode_exists for c in g if c.episode_exists is not None]
     out.episode_exists = True if True in flags else (False if flags else None)
     out.sources.sort(key=_rank)
+    years: dict = {}
+    for c in g:
+        for s in c.sources:
+            if c.year:
+                years.setdefault(s, c.year)
+        first_release = (c.facts or {}).get("first_release_year")
+        if first_release and out.kind == "movie":
+            years.setdefault(FIRST_RELEASE, first_release)
+    if len(set(years.values())) > 1:
+        out.years = years
+        out.year = pick_year(years, year_from, file_year) or out.year
     return out
 
 
@@ -191,7 +216,8 @@ class Identifier:
                     src_of[id(c)].details(c, q)
                 except LookupError_ as e:
                     notes.append(f"{src_of[id(c)].name}: {e}")
-        merged = [merge(g) for g in _group([c for g in keep for c in g])]
+        year_from = str(self.settings.get("identify.year_from", "imdb") or "imdb")
+        merged = [merge(g, year_from, q.year) for g in _group([c for g in keep for c in g])]
 
         for c in merged:
             for h in hits:

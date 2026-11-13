@@ -17,8 +17,8 @@
     ["in_library", "Already in the library"], ["details", "Details known"], ["name", "Release name matches"]];
   var LISTS = ["genres", "keywords", "original_language", "countries", "audio_languages", "subtitle_languages", "quality", "picture"];
   var BOOLS = ["collection", "in_library", "details"];
-  var CHOICES = {quality_from: ["name-or-picture", "name", "picture"], second_copy: ["version", "folder"],
-    other_audio_copy: ["folder", "version"], trailers: ["suffix", "folder"], translation_pick: ["first", "last"]};
+  var CHOICES = {quality_from: ["picture", "name", "name-or-picture"], second_copy: ["version", "folder"],
+    other_audio_copy: ["version", "folder"], trailers: ["suffix", "folder"], translation_pick: ["first", "last"]};
   var status = document.getElementById("fl-status");
 
   function el(tag, attrs, kids) {
@@ -149,6 +149,9 @@
       outs.appendChild(el("label", {"class": "check"}, [el("input", {type: "checkbox", checked: c.existing !== false, on: {change: function (e) { c.existing = e.target.checked; save(); }}}), " Use existing collection folders"]));
       outs.appendChild(el("label", {"class": "check"}, [el("input", {type: "checkbox", checked: !!c.create, on: {change: function (e) { c.create = e.target.checked; save(); }}}), " Make new collection folders"]));
       outs.appendChild(field("…from this many released films", c.min_released == null ? 2 : c.min_released, function (v) { c.min_released = +v || 2; }, {type: "number"}));
+      var dr = r.directors || (r.directors = {});
+      outs.appendChild(el("label", {"class": "check"}, [el("input", {type: "checkbox", checked: !!dr.existing, on: {change: function (e) { dr.existing = e.target.checked; save(); }}}), " Use existing director folders (a folder named after the director)"]));
+      outs.appendChild(el("label", {"class": "check"}, [el("input", {type: "checkbox", checked: !!dr.create, on: {change: function (e) { dr.create = e.target.checked; save(); }}}), " Make a folder for each director"]));
     }
     var plain = (r.tags || []).filter(function (x) { return typeof x === "string"; });
     var conditional = (r.tags || []).filter(function (x) { return typeof x !== "string"; });

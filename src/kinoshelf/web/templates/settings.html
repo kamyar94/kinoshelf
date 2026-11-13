@@ -88,6 +88,17 @@
   <p class="status small" role="status"></p>
 </form>
 
+<form class="panel" data-section="identify" aria-labelledby="h-identify">
+  <h2 class="h3" id="h-identify">When the sources disagree</h2>
+  <label>A film's year <select name="year_from">
+    <option value="imdb" {% if s.identify.year_from == 'imdb' %}selected{% endif %}>IMDb's year (else its first release anywhere)</option>
+    <option value="tmdb" {% if s.identify.year_from == 'tmdb' %}selected{% endif %}>TMDB's year</option>
+    <option value="file" {% if s.identify.year_from == 'file' %}selected{% endif %}>The year in the file name, when a source gives it</option>
+  </select></label>
+  <p class="soft small">The year goes into folder and file names. The review page shows each source's year when they differ.</p>
+  <p class="status small" role="status"></p>
+</form>
+
 <form class="panel" data-section="sources" data-nested aria-labelledby="h-sources">
   <h2 class="h3" id="h-sources">Lookup sources</h2>
   <p class="soft small">Keys stay in this instance's data folder. A saved key is never shown again; leave the box empty to keep it.</p>

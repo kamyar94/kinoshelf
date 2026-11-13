@@ -3,4 +3,4 @@
 Created by Kamyar Fatemifar (https://github.com/kamyar94). See LICENSE.md.
 """
 
-__version__ = "0.4.4"
+__version__ = "0.4.5"

@@ -50,6 +50,7 @@ class Candidate:
     # titles by language and country, dates; episode details and ids)
     facts: dict = field(default_factory=dict)
     in_library: str | None = None  # path in the media server when the title is already there
+    years: dict = field(default_factory=dict)  # the year each source gives, when they disagree ({"IMDb": 2014, ...})
     score: float = 0.0
     checks: list[dict] = field(default_factory=list)  # {"key", "ok" (True/False/None), "text"}
 

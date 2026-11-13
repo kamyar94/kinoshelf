@@ -149,8 +149,11 @@ def test_a_second_copy_becomes_a_version_or_waits():
     assert f.version_of and f.stem == "Heat (1995) [720p] - 1080p Extended" and f.hold
     it, cand = film("Heat", 1995, "Inbox/Heat.1995.mkv", width=1920, height=800)
     assert r.resolve(it, cand).stem == "Heat (1995) [720p] - 1080p version 2"  # " - 1080p" is taken
-    it, cand = film("Heat", 1995, "Inbox/Heat.1995.mkv", audio=["en", "ja"])  # other audio: its own folder
+    it, cand = film("Heat", 1995, "Inbox/Heat.1995.mkv", audio=["en", "ja"])  # other audio: a tagged version
     f = r.resolve(it, cand)
+    assert f.version_of and f.stem.endswith("Japanese Dubbed") and f.hold
+    apart = dict(RULES, policies=dict(RULES["policies"], other_audio_copy="folder"))  # or its own folder
+    f = engine(lib, apart).resolve(it, cand)
     assert f.folder_new and f.folder.endswith("[Japanese Dubbed]") and "already in the library" in f.hold
     own = dict(RULES, policies=dict(RULES["policies"], second_copy="folder"))
     it, cand = film("Heat", 1995, "Inbox/Heat.1995.1080p.mkv")

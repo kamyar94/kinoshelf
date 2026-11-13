@@ -199,7 +199,8 @@ def test_tmdb_movie_details() -> None:
     c = Candidate(kind="movie", title="A Separation", year=2011, ids={"tmdb": "44115"}, sources=["TMDB"])
     out = t.details(c, Query("movie", "A Separation"))
     assert out is c
-    assert net.calls[0]["params"]["append_to_response"] == "alternative_titles,external_ids,credits,translations,keywords"
+    assert net.calls[0]["params"]["append_to_response"] == \
+        "alternative_titles,external_ids,credits,translations,keywords,release_dates"
     assert c.runtime_min == 123.0
     assert c.ids["imdb"] == "tt1832382"
     assert c.alt_titles == ["Nader und Simin - Eine Trennung", "Une séparation"]  # no title repeats, no dupes

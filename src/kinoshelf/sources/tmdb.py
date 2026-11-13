@@ -148,7 +148,7 @@ class TmdbSource(Source):
 
     def _fill_movie(self, c: Candidate) -> bool:
         d = self._get(f"/movie/{c.ids['tmdb']}",
-                      append_to_response="alternative_titles,external_ids,credits,translations,keywords")
+                      append_to_response="alternative_titles,external_ids,credits,translations,keywords,release_dates")
         if d is None:
             return False
         self._basics(c, d, "title", "original_title", "release_date")
@@ -164,6 +164,11 @@ class TmdbSource(Source):
             c.people = ", ".join(directors[:3])
         coll = d.get("belongs_to_collection") or {}
         c.facts = _facts(d, "movie") | ({"collection": self._collection(coll)} if coll.get("id") else {})
+        if directors:
+            c.facts["directors"] = directors
+        first = _first_release_year(d)
+        if first:
+            c.facts["first_release_year"] = first  # the earliest release anywhere, festivals too (IMDb's year)
         return True
 
     def _collection(self, coll: dict) -> dict:
@@ -273,6 +278,18 @@ class TmdbSource(Source):
         c.episode_runtime_min = _minutes(ep.get("runtime"))
         c.episode_exists = True
         return c
+
+
+def _first_release_year(d: dict) -> int | None:
+    """The year of a film's earliest release in any country (premiere, festival, cinema, ...). TMDB's own date is
+    usually the main release; IMDb dates a film by its first showing, which this matches."""
+    years = []
+    for country in (d.get("release_dates") or {}).get("results") or []:
+        for r in country.get("release_dates") or []:
+            y = _year(r.get("release_date"))
+            if y:
+                years.append(y)
+    return min(years) if years else None
 
 
 def _facts(d: dict, kind: str) -> dict:

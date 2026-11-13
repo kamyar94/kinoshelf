@@ -11,7 +11,7 @@ review page. Rules are saved in `data/config.yml` under `filing` and can be expo
 ```yaml
 filing:
   enabled: true
-  policies: {quality_from: name-or-picture}
+  policies: {quality_from: picture}
   rules:
     - name: Animation
       when: {type: film, genres: [Animation]}
@@ -29,6 +29,7 @@ filing:
       when: {type: film}
       root: 'X:\Movies\Films'
       collections: {existing: true, create: true, min_released: 2}
+      directors: {existing: true, create: false}
     - name: Series
       when: {type: episode}
       root: 'X:\Series'
@@ -45,8 +46,12 @@ filing:
 the release name). `any: [...]` holds when one of its blocks holds; `not: {...}` when its block does not.
 
 **Outputs**: `root`, `folder` and `file` for films; `show_folder`, `season_folder` and `episode_file` for episodes;
-`tags` (a list; an entry can be `{text, when}` to add a tag only when its conditions hold); `collections`;
-`hold: <reason>` sends what the rule fits to the review page instead of filing it.
+`tags` (a list; an entry can be `{text, when}` to add a tag only when its conditions hold); `collections`
+(`existing`: put a film into its collection's folder when there is one, `create`: make one once `min_released`
+films of the collection are out); `directors` (both off unless you turn them on: `existing` puts a film into a
+folder named after its director when one exists under the rule's root, `create` makes one; a collection folder
+comes first); `hold: <reason>` sends what the rule fits to the review page instead of filing it. In Settings >
+Filing rules these are the check boxes under each film rule.
 
 **Tokens**: `{Title}` `{OriginalTitle}` `{TranslatedTitle:ja}` (the title in that language; `ja/JP` falls back to
 the alternative title used in that country) `{Year}` `{Quality}` `{Picture}` `{Tags}` `{Collection}` `{Folder}`
@@ -56,9 +61,12 @@ in names are replaced (`:` becomes ` -`).
 
 ## For every rule
 
-Policies apply to all rules (a rule can override any of them under `policies`): where the quality word comes from;
-a second copy of a film already filed (a version in its folder, named by `version_label`, or its own folder); a
-copy whose audio differs; trailers (beside the film, or in a Trailers folder) and parts; the dubbed-language label
+Policies apply to all rules (a rule can override any of them under `policies`): where the quality word comes from
+(`quality_from: picture`, the default, uses the picture's real size and the release name only when the size is
+unknown; `name` and `name-or-picture` trust the name first); a second copy of a film already filed (a version in
+its folder, named by `version_label`, or its own folder); a copy whose audio differs (by default a version tagged
+with its language, like `Dubbed`; or its own folder); trailers (beside the film, or in a Trailers folder) and
+parts; the dubbed-language label
 used to tell copies apart; whether copies wait on the review page; Latin titles first; and whether pictures that
 came with a film get Jellyfin's names. Existing folders are found by the IDs in their folder-icon file names, then
 by title and year; collection folders by their TMDB id or name.
@@ -79,6 +87,13 @@ Subtitles that come with a file are named `<name>.<language>[.forced|.sdh].<ext>
 `.alt`), with the language from the file name or the text; picture subtitles go to `Other Files` with an `.ignore`
 marker. Folder icons and full details files are hooks that read where the rules filed an item (see
 [FOLDER-ICONS.md](FOLDER-ICONS.md) and [HOOKS.md](HOOKS.md)).
+
+## The year
+
+When the sources give a film different years, **Settings > When the sources disagree** decides which one goes into
+names: IMDb's (the default; when IMDb's data is not available, the film's first release anywhere, festivals
+included, which is how IMDb dates a film), TMDB's, or the year in the file name when a source gives it. The review
+page lists each source's year when they differ.
 
 ## Updates and rules
 

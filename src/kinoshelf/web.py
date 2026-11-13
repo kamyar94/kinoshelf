@@ -37,7 +37,7 @@ COOKIE = "ks_session"
 POSTER_HOSTS = {"image.tmdb.org", "static.tvmaze.com", "m.media-amazon.com", "ia.media-imdb.com"}
 DEFAULT_PROXY = DEFAULTS["network"]["proxy"]
 SECTIONS = ["paths", "naming", "rule", "schedule", "subtitles", "sources", "network", "device", "playback", "hooks",
-            "junk", "server", "watcher", "update"]
+            "junk", "server", "watcher", "update", "identify"]
 
 
 class App:
@@ -916,6 +916,12 @@ def _validate(core: App, section: str, body: dict):
         cur.update(release_words=_lines(body.get("release_words")), files=_lines(body.get("files")),
                    sample_max_mb=int(_num(body.get("sample_max_mb", 150), 1, 5000, "Sample size")),
                    auto_set_aside=bool(body.get("auto_set_aside")))
+        return cur, note
+    if section == "identify":
+        year_from = str(body.get("year_from", cur.get("year_from", "imdb")))
+        if year_from not in ("imdb", "tmdb", "file"):
+            raise ValueError("Pick IMDb, TMDB or the file name for the year")
+        cur.update(year_from=year_from)
         return cur, note
     if section == "watcher":
         cur.update(enabled=bool(body.get("enabled")),

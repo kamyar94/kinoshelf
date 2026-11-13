@@ -132,6 +132,9 @@ DEFAULTS: dict[str, Any] = {
     # Filing rules (docs/FILING.md): an ordered list of rules edited in Settings > Filing rules. Off: the two
     # naming templates above decide every destination.
     "filing": {"enabled": False, "rules": [], "policies": {}},
+    # When the sources give a film different years: imdb (IMDb's, else the first release anywhere, which is how
+    # IMDb dates a film), tmdb (TMDB's) or file (the year in the file name when a source gives it).
+    "identify": {"year_from": "imdb"},
     # Updates (docs/UPDATES.md): the updater container fetches and checks new images; a host step applies them.
     "update": {
         "enabled": True,  # install new versions by themselves; off: only when you press Update now
